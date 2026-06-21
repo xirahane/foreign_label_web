@@ -2,7 +2,7 @@ import { useDatasetStore } from '@/stores/datasetStore'
 import type { BlendMode, BBoxStrategy } from '@/types'
 
 export default function ParamPanel() {
-  const { params, updateParams } = useDatasetStore()
+  const { params, updateParams, resetParams } = useDatasetStore()
 
   const totalOptions = [10, 100, 500, 1000]
   const hasCustom = !totalOptions.includes(params.totalCount)
@@ -47,8 +47,24 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                缩放范围: {params.scaleMin}%~{params.scaleMax}%
+                缩放范围
               </label>
+              <div className="flex items-center gap-1 mb-1">
+                <input
+                  type="number" min={10} max={300}
+                  value={params.scaleMin}
+                  onChange={(e) => updateParams({ scaleMin: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+                <span className="text-gray-400 text-xs">%~</span>
+                <input
+                  type="number" min={10} max={300}
+                  value={params.scaleMax}
+                  onChange={(e) => updateParams({ scaleMax: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+                <span className="text-gray-400 text-xs">%</span>
+              </div>
               <div className="flex gap-2">
                 <input
                   type="range" min={10} max={300} value={params.scaleMin}
@@ -65,8 +81,24 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                旋转角度: {params.rotationMin}°~{params.rotationMax}°
+                旋转角度
               </label>
+              <div className="flex items-center gap-1 mb-1">
+                <input
+                  type="number" min={0} max={360}
+                  value={params.rotationMin}
+                  onChange={(e) => updateParams({ rotationMin: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+                <span className="text-gray-400 text-xs">°~</span>
+                <input
+                  type="number" min={0} max={360}
+                  value={params.rotationMax}
+                  onChange={(e) => updateParams({ rotationMax: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+                <span className="text-gray-400 text-xs">°</span>
+              </div>
               <div className="flex gap-2">
                 <input
                   type="range" min={0} max={360} value={params.rotationMin}
@@ -122,13 +154,21 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                边缘融合强度: {params.edgeBlendStrength}
+                边缘融合强度
               </label>
-              <input
-                type="range" min={0} max={100} value={params.edgeBlendStrength}
-                onChange={(e) => updateParams({ edgeBlendStrength: Number(e.target.value) })}
-                className="w-full"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="range" min={0} max={100} value={params.edgeBlendStrength}
+                  onChange={(e) => updateParams({ edgeBlendStrength: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <input
+                  type="number" min={0} max={100}
+                  value={params.edgeBlendStrength}
+                  onChange={(e) => updateParams({ edgeBlendStrength: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+              </div>
             </div>
 
             <div>
@@ -137,9 +177,8 @@ export default function ParamPanel() {
               </label>
               <div className="flex gap-1">
                 {([
-                  { key: 'feather' as BlendMode, label: '羽化融合' },
-                  { key: 'poisson' as BlendMode, label: '泊松融合' },
-                  { key: 'direct' as BlendMode, label: '直接融合' },
+                   { key: 'poisson' as BlendMode, label: '泊松融合' },
+                   { key: 'direct' as BlendMode, label: '直接融合' },
                 ]).map((m) => (
                   <button
                     key={m.key}
@@ -158,13 +197,22 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                边缘留白: {params.edgeMargin}px
+                边缘留白
               </label>
-              <input
-                type="range" min={0} max={200} value={params.edgeMargin}
-                onChange={(e) => updateParams({ edgeMargin: Number(e.target.value) })}
-                className="w-full"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="range" min={0} max={200} value={params.edgeMargin}
+                  onChange={(e) => updateParams({ edgeMargin: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <input
+                  type="number" min={0} max={200}
+                  value={params.edgeMargin}
+                  onChange={(e) => updateParams({ edgeMargin: Number(e.target.value) })}
+                  className="input-field text-xs w-14 text-center"
+                />
+                <span className="text-xs text-gray-400">px</span>
+              </div>
               <div className="text-xs text-gray-400 mt-0.5">
                 异物与包装袋边缘的最小距离
               </div>
@@ -266,7 +314,7 @@ export default function ParamPanel() {
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 mt-auto">
         <button
-          onClick={() => updateParams({})}
+          onClick={resetParams}
           className="btn-secondary text-xs w-full"
         >
           重置参数

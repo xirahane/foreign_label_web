@@ -103,6 +103,11 @@ export interface CanvasObject {
   imageData: string
 }
 
+export interface PolygonPoint {
+  x: number
+  y: number
+}
+
 export type Step = 'library' | 'config' | 'generator' | 'management'
 export type BlendMode = 'feather' | 'poisson' | 'direct'
 export type BBoxStrategy = 'tight' | 'expand'

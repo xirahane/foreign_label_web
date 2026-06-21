@@ -8,7 +8,7 @@ import type { DatasetSample } from '@/types'
 export default function DatasetManagement() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { datasets, currentDatasetId, currentSamples, selectDataset, loadDatasets, removeDataset, removeSample, addSamples } = useDatasetStore()
+  const { datasets, currentDatasetId, currentSamples, selectDataset, loadDatasets, removeDataset, removeSample, addSamples, clearSamples } = useDatasetStore()
   const { objects } = useObjectStore()
   const [viewingSampleIdx, setViewingSampleIdx] = useState(0)
   const [imgScale, setImgScale] = useState(1)
@@ -58,12 +58,18 @@ export default function DatasetManagement() {
     }
   }, [viewingSample, viewingSampleIdx, currentSamples.length, removeSample])
 
-  const handleDeleteAll = useCallback(() => {
+  const handleDeleteAll = useCallback(async () => {
     if (currentSamples.length === 0) return
     setLastDeleted([...currentSamples])
-    currentSamples.forEach((s) => removeSample(s.id))
+    await clearSamples()
     setViewingSampleIdx(0)
-  }, [currentSamples, removeSample])
+  }, [currentSamples, clearSamples])
+
+  useEffect(() => {
+    if (currentSamples.length > 0 && viewingSampleIdx >= currentSamples.length) {
+      setViewingSampleIdx(Math.max(0, currentSamples.length - 1))
+    }
+  }, [currentSamples.length, viewingSampleIdx])
 
   const handleUndo = useCallback(async () => {
     if (!lastDeleted || lastDeleted.length === 0) return
@@ -251,19 +257,28 @@ export default function DatasetManagement() {
                   />
                   {viewingSample.annotations.map((ann, i) => {
                     const s = imgScale || 1
+                    const imgArea = (imgRef.current?.naturalWidth || 1) * (imgRef.current?.naturalHeight || 1)
+                    const minArea = imgArea * 0.001
+                    let annW = ann.width
+                    let annH = ann.height
+                    if (annW * annH < minArea) {
+                      const scaleFactor = Math.sqrt(minArea / (annW * annH))
+                      annW *= scaleFactor
+                      annH *= scaleFactor
+                    }
                     return (
                       <div
                         key={i}
                         className="absolute border-2 border-primary-500 bg-primary-500/10"
                         style={{
-                          left: `${(ann.centerX - ann.width / 2) * s}px`,
-                          top: `${(ann.centerY - ann.height / 2) * s}px`,
-                          width: `${ann.width * s}px`,
-                          height: `${ann.height * s}px`,
+                          left: `${(ann.centerX - annW / 2) * s}px`,
+                          top: `${(ann.centerY - annH / 2) * s}px`,
+                          width: `${annW * s}px`,
+                          height: `${annH * s}px`,
                         }}
                       >
                         <span className="absolute -top-5 left-0 text-xs bg-primary-500 text-white px-1 rounded whitespace-nowrap">
-                          {categories[ann.classId] || `类别${ann.classId}`}
+                          0
                         </span>
                       </div>
                     )

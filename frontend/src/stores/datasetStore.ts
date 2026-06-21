@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { db } from '@/db/db'
-import type { Dataset, DatasetSample, GenerationParams } from '@/types'
+import type { Dataset, DatasetSample, GenerationParams, PolygonPoint } from '@/types'
+
+interface BagRect { x: number; y: number; width: number; height: number }
 
 interface DatasetStore {
   datasets: Dataset[]
@@ -8,15 +10,28 @@ interface DatasetStore {
   currentSamples: DatasetSample[]
   params: GenerationParams
   loading: boolean
+  generatorBgId: string | null
+  generatorObjectIds: string[]
+  generatorMode: 'auto' | 'manual'
+  generatorRegionType: 'rect' | 'polygon' | null
+  generatorRegionRect: BagRect | null
+  generatorRegionPolygon: PolygonPoint[] | null
+  generatorAutoRegionPolygon: PolygonPoint[] | null
   loadDatasets: () => Promise<void>
   createDataset: (data: Pick<Dataset, 'name' | 'categoryCount' | 'outputFormat' | 'imageSize'>) => Promise<string>
   removeDataset: (id: string) => Promise<void>
   selectDataset: (id: string) => Promise<void>
   loadSamples: (datasetId: string) => Promise<void>
   addSamples: (samples: Omit<DatasetSample, 'id'>[]) => Promise<void>
+  clearSamples: () => Promise<void>
   removeSample: (id: string) => Promise<void>
   updateParams: (updates: Partial<GenerationParams>) => void
   resetParams: () => void
+  setGeneratorBgId: (id: string | null) => void
+  setGeneratorObjectIds: (ids: string[]) => void
+  setGeneratorMode: (mode: 'auto' | 'manual') => void
+  setGeneratorRegion: (type: 'rect' | 'polygon' | null, rect: BagRect | null, polygon: PolygonPoint[] | null) => void
+  setGeneratorAutoRegion: (polygon: PolygonPoint[] | null) => void
 }
 
 const defaultParams: GenerationParams = {
@@ -31,7 +46,7 @@ const defaultParams: GenerationParams = {
   brightnessVariance: false,
   contrastVariance: false,
   edgeBlendStrength: 50,
-  blendMode: 'feather',
+  blendMode: 'direct',
   bboxStrategy: 'tight',
   bboxExpandRatio: 10,
   perClassStrategies: {},
@@ -47,6 +62,13 @@ export const useDatasetStore = create<DatasetStore>((set, get) => ({
   currentSamples: [],
   params: { ...defaultParams },
   loading: false,
+  generatorBgId: null,
+  generatorObjectIds: [],
+  generatorMode: 'auto',
+  generatorRegionType: null,
+  generatorRegionRect: null,
+  generatorRegionPolygon: null,
+  generatorAutoRegionPolygon: null,
 
   loadDatasets: async () => {
     set({ loading: true })
@@ -110,7 +132,29 @@ export const useDatasetStore = create<DatasetStore>((set, get) => ({
     }
   },
 
+  clearSamples: async () => {
+    const dsId = get().currentDatasetId
+    if (dsId) {
+      await db.datasetSamples.where('datasetId').equals(dsId).delete()
+      await db.datasets.update(dsId, { generatedImages: 0, labelCount: 0 })
+      set({ currentSamples: [] })
+      await get().loadDatasets()
+    }
+  },
+
   updateParams: (updates) => set((s) => ({ params: { ...s.params, ...updates } })),
 
   resetParams: () => set({ params: { ...defaultParams } }),
+
+  setGeneratorBgId: (id) => set({ generatorBgId: id }),
+  setGeneratorObjectIds: (ids) => set({ generatorObjectIds: ids }),
+  setGeneratorMode: (mode) => set({ generatorMode: mode }),
+  setGeneratorRegion: (type: 'rect' | 'polygon' | null, rect: BagRect | null, polygon: PolygonPoint[] | null) => set({
+    generatorRegionType: type,
+    generatorRegionRect: rect,
+    generatorRegionPolygon: polygon,
+  }),
+  setGeneratorAutoRegion: (polygon: PolygonPoint[] | null) => set({
+    generatorAutoRegionPolygon: polygon,
+  }),
 }))

@@ -1,4 +1,4 @@
-import type { YOLOBoxRaw, CropRect } from '@/types'
+import type { YOLOBoxRaw, CropRect, PolygonPoint } from '@/types'
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -304,6 +304,135 @@ export function getBagBoundary(
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
 
+function morphologyDilate(
+  imageData: ImageData,
+  kernelSize: number
+): ImageData {
+  const { data, width, height } = imageData
+  const result = new ImageData(width, height)
+  result.data.set(data)
+  const halfK = Math.floor(kernelSize / 2)
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let maxVal = 0
+      for (let ky = -halfK; ky <= halfK; ky++) {
+        for (let kx = -halfK; kx <= halfK; kx++) {
+          const nx = x + kx, ny = y + ky
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const val = data[(ny * width + nx) * 4]
+            if (val > maxVal) maxVal = val
+          }
+        }
+      }
+      const idx = (y * width + x) * 4
+      result.data[idx] = result.data[idx + 1] = result.data[idx + 2] = result.data[idx + 3] = maxVal
+    }
+  }
+  return result
+}
+
+function morphologyErode(
+  imageData: ImageData,
+  kernelSize: number
+): ImageData {
+  const { data, width, height } = imageData
+  const result = new ImageData(width, height)
+  result.data.set(data)
+  const halfK = Math.floor(kernelSize / 2)
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let minVal = 255
+      for (let ky = -halfK; ky <= halfK; ky++) {
+        for (let kx = -halfK; kx <= halfK; kx++) {
+          const nx = x + kx, ny = y + ky
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const val = data[(ny * width + nx) * 4]
+            if (val < minVal) minVal = val
+          }
+        }
+      }
+      const idx = (y * width + x) * 4
+      result.data[idx] = result.data[idx + 1] = result.data[idx + 2] = result.data[idx + 3] = minVal
+    }
+  }
+  return result
+}
+
+export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | null {
+  const { canvas, ctx } = createCanvas(img.width, img.height)
+  ctx.drawImage(img, 0, 0)
+  const imageData = ctx.getImageData(0, 0, img.width, img.height)
+  const { data, width, height } = imageData
+
+  const maskData = new ImageData(width, height)
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+    const value = gray < 128 ? 255 : 0
+    maskData.data[i] = maskData.data[i + 1] = maskData.data[i + 2] = value
+    maskData.data[i + 3] = value
+  }
+
+  const closeRadius = Math.max(3, Math.round(Math.min(width, height) * 0.05))
+  let closed = morphologyDilate(maskData, closeRadius)
+  closed = morphologyErode(closed, closeRadius)
+
+  const dilateRadius = Math.max(5, Math.round(Math.min(width, height) * 0.03))
+  const dilated = morphologyDilate(closed, dilateRadius)
+
+  const whitePixels: { x: number; y: number }[] = []
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (dilated.data[(y * width + x) * 4] > 128) {
+        whitePixels.push({ x, y })
+      }
+    }
+  }
+
+  if (whitePixels.length < 10) return null
+
+  let cx = 0, cy = 0
+  for (const p of whitePixels) { cx += p.x; cy += p.y }
+  cx /= whitePixels.length; cy /= whitePixels.length
+
+  let xx = 0, yy = 0, xy = 0
+  for (const p of whitePixels) {
+    const dx = p.x - cx, dy = p.y - cy
+    xx += dx * dx; yy += dy * dy; xy += dx * dy
+  }
+  xx /= whitePixels.length; yy /= whitePixels.length; xy /= whitePixels.length
+
+  const theta = 0.5 * Math.atan2(2 * xy, xx - yy)
+  const cos = Math.cos(theta), sin = Math.sin(theta)
+
+  let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
+  for (const p of whitePixels) {
+    const dx = p.x - cx, dy = p.y - cy
+    const u = dx * cos + dy * sin
+    const v = -dx * sin + dy * cos
+    if (u < minU) minU = u; if (u > maxU) maxU = u
+    if (v < minV) minV = v; if (v > maxV) maxV = v
+  }
+
+  const margin = Math.min(maxU - minU, maxV - minV) * 0.08
+  minU -= margin; maxU += margin; minV -= margin; maxV += margin
+
+  const corners: PolygonPoint[] = [
+    { x: cx + minU * cos - minV * sin, y: cy + minU * sin + minV * cos },
+    { x: cx + maxU * cos - minV * sin, y: cy + maxU * sin + minV * cos },
+    { x: cx + maxU * cos - maxV * sin, y: cy + maxU * sin + maxV * cos },
+    { x: cx + minU * cos - maxV * sin, y: cy + minU * sin + maxV * cos },
+  ]
+
+  corners.forEach((c) => {
+    c.x = Math.max(0, Math.min(width, c.x))
+    c.y = Math.max(0, Math.min(height, c.y))
+  })
+
+  return corners
+}
+
 export function drawContoursOnCanvas(
   sourceCanvas: HTMLCanvasElement,
   contours: { x: number; y: number; width: number; height: number }[],
@@ -381,6 +510,7 @@ export interface BlendOptions {
   strength: number
   blendMode?: import('@/types').BlendMode
   bgMean?: number
+  opacity?: number
 }
 
 function boxBlurAlpha(
@@ -449,8 +579,12 @@ export function drawWithEdgeBlend(
   if (rotation !== 0) ctx.rotate((rotation * Math.PI) / 180)
   ctx.translate(-cx, -cy)
 
+  const applyOpacity = (opacity: number) => {
+    ctx.globalAlpha = Math.max(0, Math.min(1, opacity))
+  }
+
   if (options.blendMode === 'direct') {
-    ctx.globalAlpha = 1
+    applyOpacity(options.opacity ?? 1)
     ctx.drawImage(img, x, y, width, height)
     ctx.globalAlpha = 1
     ctx.restore()
@@ -497,12 +631,12 @@ export function drawWithEdgeBlend(
       imageData.data.set(blurredAlpha)
     }
     tempCtx.putImageData(imageData, 0, 0)
-    ctx.globalAlpha = 1
+    applyOpacity(options.opacity ?? 1)
     ctx.drawImage(tempCanvas, x, y, width, height)
     ctx.globalAlpha = 1
   } else {
     tempCtx.putImageData(imageData, 0, 0)
-    ctx.globalAlpha = 1 - options.strength / 100 * 0.5
+    applyOpacity(options.opacity ?? 1)
     ctx.drawImage(tempCanvas, x, y, width, height)
     ctx.globalAlpha = 1
   }

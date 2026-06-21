@@ -9,6 +9,8 @@ interface ResourcePanelProps {
   onSelectBg: (id: string) => void
   selectedObjectIds: string[]
   onToggleObject: (id: string) => void
+  onSelectAllObjs: () => void
+  onDeselectAllObjs: () => void
   mode: 'auto' | 'manual'
 }
 
@@ -17,6 +19,8 @@ export default function ResourcePanel({
   onSelectBg,
   selectedObjectIds,
   onToggleObject,
+  onSelectAllObjs,
+  onDeselectAllObjs,
   mode,
 }: ResourcePanelProps) {
   const { backgrounds, addBackground, removeBackground } = useBackgroundStore()
@@ -184,6 +188,14 @@ export default function ResourcePanel({
 
         {activeTab === 'objects' && (
           <div className="flex flex-col h-full">
+            <div className="px-3 py-2 flex gap-2">
+              <button onClick={onSelectAllObjs} className="btn-secondary text-xs px-2 py-1 flex-1">
+                全选
+              </button>
+              <button onClick={onDeselectAllObjs} className="btn-secondary text-xs px-2 py-1 flex-1">
+                取消全选
+              </button>
+            </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               {filteredObjs.map((obj) => {
                 const isSelected = selectedObjectIds.includes(obj.id)
@@ -201,15 +213,12 @@ export default function ResourcePanel({
                         : 'hover:bg-gray-50 dark:hover:bg-gray-900'
                     }`}
                   >
-                    <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center relative">
+                    <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
                       {obj.thumbnail ? (
                         <img src={obj.thumbnail} alt={obj.name} className="w-full h-full object-contain" />
                       ) : (
                         <span className="text-gray-400 text-xs">无图</span>
                       )}
-                      <div className="absolute top-0 left-0 w-4 h-4 rounded-br-md bg-primary-500 text-white text-[10px] flex items-center justify-center">
-                        ✓
-                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{obj.name}</div>

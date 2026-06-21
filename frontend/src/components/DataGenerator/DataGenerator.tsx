@@ -1,29 +1,36 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useDatasetStore } from '@/stores/datasetStore'
+import { useObjectStore } from '@/stores/objectStore'
 import ResourcePanel from './ResourcePanel'
 import PreviewCanvas from './PreviewCanvas'
 import ParamPanel from './ParamPanel'
 
 export default function DataGenerator() {
-  const { datasets, currentDatasetId, selectDataset } = useDatasetStore()
+  const {
+    datasets, currentDatasetId, selectDataset,
+    generatorBgId, generatorObjectIds, generatorMode,
+    setGeneratorBgId, setGeneratorObjectIds, setGeneratorMode,
+  } = useDatasetStore()
+  const objects = useObjectStore((s) => s.objects)
+  const processedObjIds = useMemo(() =>
+    objects.filter((o) => o.maskData && o.cutoutImage).map((o) => o.id),
+    [objects])
   const [leftWidth, setLeftWidth] = useState(260)
   const [rightWidth, setRightWidth] = useState(300)
   const [isDraggingLeft, setIsDraggingLeft] = useState(false)
   const [isDraggingRight, setIsDraggingRight] = useState(false)
 
-  const [currentBgId, setCurrentBgId] = useState<string | null>(null)
-  const [selectedObjectIds, setSelectedObjectIds] = useState<string[]>([])
-  const [mode, setMode] = useState<'auto' | 'manual'>('auto')
-
   const handleSelectBg = useCallback((id: string) => {
-    setCurrentBgId((prev) => (prev === id ? null : id))
-  }, [])
+    setGeneratorBgId(generatorBgId === id ? null : id)
+  }, [generatorBgId, setGeneratorBgId])
 
   const handleToggleObject = useCallback((id: string) => {
-    setSelectedObjectIds((prev) =>
-      prev.includes(id) ? prev.filter((oid) => oid !== id) : [...prev, id]
+    setGeneratorObjectIds(
+      generatorObjectIds.includes(id)
+        ? generatorObjectIds.filter((oid) => oid !== id)
+        : [...generatorObjectIds, id]
     )
-  }, [])
+  }, [generatorObjectIds, setGeneratorObjectIds])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDraggingLeft) {
@@ -70,11 +77,13 @@ export default function DataGenerator() {
     >
       <div style={{ width: leftWidth }} className="flex-shrink-0 border-r border-gray-200 dark:border-gray-800 overflow-hidden relative">
         <ResourcePanel
-          currentBgId={currentBgId}
+          currentBgId={generatorBgId}
           onSelectBg={handleSelectBg}
-          selectedObjectIds={selectedObjectIds}
+          selectedObjectIds={generatorObjectIds}
           onToggleObject={handleToggleObject}
-          mode={mode}
+          onSelectAllObjs={() => setGeneratorObjectIds(processedObjIds)}
+          onDeselectAllObjs={() => setGeneratorObjectIds([])}
+          mode={generatorMode}
         />
       </div>
 
@@ -87,33 +96,33 @@ export default function DataGenerator() {
         <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-3">
           <div className="flex gap-1">
             <button
-              onClick={() => setMode('auto')}
+              onClick={() => setGeneratorMode('auto')}
               className={`px-2.5 py-1 rounded text-xs transition-all ${
-                mode === 'auto' ? 'bg-primary-500 text-white' : 'btn-secondary'
+                generatorMode === 'auto' ? 'bg-primary-500 text-white' : 'btn-secondary'
               }`}
             >
               自动模式
             </button>
             <button
-              onClick={() => setMode('manual')}
+              onClick={() => setGeneratorMode('manual')}
               className={`px-2.5 py-1 rounded text-xs transition-all ${
-                mode === 'manual' ? 'bg-primary-500 text-white' : 'btn-secondary'
+                generatorMode === 'manual' ? 'bg-primary-500 text-white' : 'btn-secondary'
               }`}
             >
               手动模式
             </button>
           </div>
           <span className="text-xs text-gray-400">
-            {mode === 'auto'
+            {generatorMode === 'auto'
               ? '自动随机放置异物，点击左侧异物可多选限定范围'
               : '拖拽异物到画布上手动摆放'}
           </span>
         </div>
         <div className="flex-1 overflow-hidden">
           <PreviewCanvas
-            currentBgId={currentBgId}
-            selectedObjectIds={selectedObjectIds}
-            mode={mode}
+            currentBgId={generatorBgId}
+            selectedObjectIds={generatorObjectIds}
+            mode={generatorMode}
           />
         </div>
       </div>
