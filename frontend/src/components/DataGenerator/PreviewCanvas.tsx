@@ -97,7 +97,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   const { objects, incrementUsage } = useObjectStore()
   const {
     params, currentDatasetId, addSamples, datasets, clearSamples,
-    generatorRegions, setGeneratorRegion,
+    setGeneratorRegion,
   } = useDatasetStore()
 
   const [canvasObjects, setCanvasObjects] = useState<CanvasObject[]>([])
@@ -161,8 +161,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
           setBagBoundary({ x: 0, y: 0, width: crop.width, height: crop.height })
           croppedImg = cropImageToRect(img, crop).croppedImg as unknown as HTMLImageElement
         } else {
-      setCropRect(null)
-      cropRectRef.current = null
+          setCropRect(null)
           cropRectRef.current = null
           setBagBoundary({ x: 0, y: 0, width: img.width, height: img.height })
         }
@@ -174,23 +173,42 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         fitRectRef.current = fit
         canvasScaleRef.current = croppedImg.width / fit.drawW
 
-        setYoloBoxes(bg.yoloBoxes || [])
+        const yoloRaw = bg.yoloBoxes || []
+        const adjustedYolo: YOLOBoxRaw[] = []
+        if (crop && yoloRaw.length > 0) {
+          const cw = crop.width, ch = crop.height
+          const fullW = img.width, fullH = img.height
+          for (const box of yoloRaw) {
+            const absX = box.centerX * fullW
+            const absY = box.centerY * fullH
+            const absW = box.width * fullW
+            const absH = box.height * fullH
+            const newX = absX - crop.x
+            const newY = absY - crop.y
+            if (newX + absW / 2 > 0 && newX - absW / 2 < cw && newY + absH / 2 > 0 && newY - absH / 2 < ch) {
+              adjustedYolo.push({
+                classId: box.classId,
+                centerX: newX / cw,
+                centerY: newY / ch,
+                width: absW / cw,
+                height: absH / ch,
+              })
+            }
+          }
+        }
+        setYoloBoxes(crop ? adjustedYolo : yoloRaw)
         setPreviewZoom(1)
         setPreviewPan({ x: 0, y: 0 })
 
-        const region = generatorRegions[bg.id]
+        const region = useDatasetStore.getState().generatorRegions[bg.id]
         if (region?.type === 'polygon' && region.polygon) {
           setUserPolygon(region.polygon)
           setUserBoundary(null)
         } else if (region?.type === 'rect' && region.rect) {
           setUserBoundary(region.rect)
           setUserPolygon(null)
-        } else if (region?.autoPolygon) {
-          setUserPolygon(region.autoPolygon)
-          setUserBoundary(null)
         } else {
-          setUserBoundary(null)
-          setUserPolygon(null)
+          autoDetectAndSet(croppedImg, bg.id)
         }
 
         renderCanvas()
@@ -372,6 +390,20 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   }, [canvasObjects, bgImgRef, selectedObjId, params, objects, bagBoundary, userBoundary, userPolygon, drawMode, rectDrawing, polygonPoints, polygonPreview, yoloBoxes, cropRect])
   const renderCanvasRef = useRef(renderCanvas)
   renderCanvasRef.current = renderCanvas
+
+  const autoDetectAndSet = useCallback((img: HTMLImageElement, bgId: string) => {
+    const corners = detectTiltedBoundary(img)
+    if (corners && corners.length >= 3) {
+      setUserPolygon(corners)
+      setUserBoundary(null)
+      useDatasetStore.getState().setGeneratorRegion(bgId, {
+        type: 'polygon', rect: null, polygon: null, autoPolygon: corners,
+      })
+    } else {
+      setUserBoundary(null)
+      setUserPolygon(null)
+    }
+  }, [])
 
   useEffect(() => { renderCanvas() }, [renderCanvas])
 
@@ -826,20 +858,10 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   }, [bg, currentDatasetId, clearSamples, handleGenerate])
 
   const handleAutoDetectRegion = useCallback(async () => {
-    if (!bg) return
-    const img = await loadImage(bg.dataUrl)
-    let corners = detectTiltedBoundary(img)
-    if (corners) {
-      const crop = cropRectRef.current
-      if (crop) {
-        corners = corners.map((c) => ({ x: c.x - crop.x, y: c.y - crop.y }))
-      }
-      setUserPolygon(corners)
-      setUserBoundary(null)
-      setGeneratorRegion(bg.id, { type: 'polygon', rect: null, polygon: corners, autoPolygon: corners })
-    }
+    if (!bg || !bgImgRef.current) return
+    autoDetectAndSet(bgImgRef.current, bg.id)
     renderCanvasRef.current()
-  }, [bg, setGeneratorRegion])
+  }, [bg, autoDetectAndSet])
 
   const canGenerate = !!bg && processedObjects.length > 0
   const selectedInfo = selectedObjectIds.length > 0 ? `已选 ${selectedObjectIds.length} 个异物` : null

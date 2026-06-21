@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useBackgroundStore } from '@/stores/backgroundStore'
+import { useDatasetStore } from '@/stores/datasetStore'
 import { useObjectStore } from '@/stores/objectStore'
 import { parseYOLOTxt } from '@/utils/imageProcessing'
 import type { YOLOBoxRaw } from '@/types'
@@ -24,6 +25,7 @@ export default function ResourcePanel({
   mode,
 }: ResourcePanelProps) {
   const { backgrounds, addBackground, removeBackground } = useBackgroundStore()
+  const currentDatasetId = useDatasetStore((s) => s.currentDatasetId)
   const { objects } = useObjectStore()
   const [bgSearch, setBgSearch] = useState('')
   const [objSearch, setObjSearch] = useState('')
@@ -42,6 +44,12 @@ export default function ResourcePanel({
     const imageFiles = fileList.filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|bmp|webp)$/i.test(f.name))
     const txtFiles = fileList.filter((f) => f.name.endsWith('.txt'))
 
+    if (imageFiles.length === 0) return
+
+    const currentBgs = useBackgroundStore.getState().backgrounds
+    const existingNames = new Set(currentBgs.map((b) => b.name.replace(/\s*\(\d+\)\s*$/, '').trim()))
+    const skippedNames: string[] = []
+
     const txtMap = new Map<string, YOLOBoxRaw[]>()
     Promise.all(txtFiles.map(async (tf) => {
       const text = await tf.text()
@@ -50,16 +58,23 @@ export default function ResourcePanel({
     })).then(() => {
       imageFiles.forEach((file) => {
         if (!file.type.startsWith('image/') && !/\.(png|jpe?g|bmp|webp)$/i.test(file.name)) return
+        const baseName = file.name.replace(/\.[^.]+$/, '')
+        const checkName = baseName.replace(/\s*\(\d+\)\s*$/, '').trim()
+        if (existingNames.has(checkName)) {
+          skippedNames.push(baseName)
+          return
+        }
+        existingNames.add(checkName)
         const reader = new FileReader()
         reader.onload = (ev) => {
           const img = new Image()
           img.onload = () => {
-            const baseName = file.name.replace(/\.[^.]+$/, '')
             addBackground({
               name: baseName,
               dataUrl: ev.target?.result as string,
               width: img.width,
               height: img.height,
+              datasetId: currentDatasetId || undefined,
               yoloBoxes: txtMap.get(baseName),
             })
           }
@@ -67,10 +82,17 @@ export default function ResourcePanel({
         }
         reader.readAsDataURL(file)
       })
+      if (skippedNames.length > 0) {
+        setTimeout(() => {
+          alert(`以下 ${skippedNames.length} 个背景已存在，已跳过：\n${skippedNames.join('\n')}`)
+        }, 100)
+      }
     })
   }, [addBackground])
 
-  const filteredBgs = backgrounds.filter((b) =>
+  const datasetBgs = backgrounds.filter((b) => !b.datasetId || b.datasetId === currentDatasetId)
+
+  const filteredBgs = datasetBgs.filter((b) =>
     b.name.toLowerCase().includes(bgSearch.toLowerCase())
   )
 
@@ -93,7 +115,7 @@ export default function ResourcePanel({
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
-            背景图 ({backgrounds.length})
+            背景图 ({datasetBgs.length})
           </button>
           <button
             onClick={() => setActiveTab('objects')}
@@ -174,13 +196,13 @@ export default function ResourcePanel({
               ))}
               {filteredBgs.length === 0 && (
                 <div className="col-span-2 text-center text-xs text-gray-400 py-8">
-                  {backgrounds.length === 0 ? '暂无背景图，点击上传' : '没有匹配结果'}
+                  {datasetBgs.length === 0 ? '暂无背景图，点击上传' : '没有匹配结果'}
                 </div>
               )}
             </div>
             {filteredBgs.length > 0 && (
               <div className="p-2 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between">
-                <span>共 {backgrounds.length} 张背景图</span>
+                <span>共 {datasetBgs.length} 张背景图</span>
               </div>
             )}
           </div>

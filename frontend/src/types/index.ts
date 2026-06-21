@@ -19,6 +19,7 @@ export interface BackgroundImage {
   width: number
   height: number
   createdAt: number
+  datasetId?: string
   yoloBoxes?: YOLOBoxRaw[]
   cropRect?: CropRect
 }

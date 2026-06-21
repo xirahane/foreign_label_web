@@ -11,7 +11,7 @@ class AppDatabase extends Dexie {
     super('ForeignLabelDB')
     this.version(1).stores({
       foreignObjects: 'id, name, category, createdAt',
-      backgroundImages: 'id, name, createdAt',
+      backgroundImages: 'id, name, createdAt, datasetId',
       datasets: 'id, name, createdAt',
       datasetSamples: 'id, datasetId, generatedAt',
     })

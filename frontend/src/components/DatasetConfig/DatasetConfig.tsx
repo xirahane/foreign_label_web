@@ -35,7 +35,7 @@ export default function DatasetConfig() {
   }
 
   const handleViewDataset = (id: string) => {
-    navigate('/management', { state: { datasetId: id } })
+    navigate('/generator', { state: { datasetId: id } })
   }
 
   const formatDate = (ts: number) => {

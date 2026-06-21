@@ -7,7 +7,7 @@ interface BackgroundStore {
   selectedBgIds: string[]
   loading: boolean
   loadBackgrounds: () => Promise<void>
-  addBackground: (data: { name: string; dataUrl: string; width: number; height: number; yoloBoxes?: import('@/types').YOLOBoxRaw[] }) => Promise<void>
+  addBackground: (data: { name: string; dataUrl: string; width: number; height: number; datasetId?: string; yoloBoxes?: import('@/types').YOLOBoxRaw[] }) => Promise<string>
   removeBackground: (id: string) => Promise<void>
   removeBackgrounds: (ids: string[]) => Promise<void>
   selectBg: (id: string, multi?: boolean) => void
@@ -27,13 +27,15 @@ export const useBackgroundStore = create<BackgroundStore>((set, get) => ({
   },
 
   addBackground: async (data) => {
+    const id = crypto.randomUUID()
     const bg: BackgroundImage = {
       ...data,
-      id: crypto.randomUUID(),
+      id,
       createdAt: Date.now(),
     }
     await db.backgroundImages.put(bg)
     await get().loadBackgrounds()
+    return id
   },
 
   removeBackground: async (id) => {

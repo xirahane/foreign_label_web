@@ -361,9 +361,14 @@ function morphologyErode(
 }
 
 export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | null {
-  const { canvas, ctx } = createCanvas(img.width, img.height)
-  ctx.drawImage(img, 0, 0)
-  const imageData = ctx.getImageData(0, 0, img.width, img.height)
+  const maxDim = 400
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+  const sw = Math.round(img.width * scale)
+  const sh = Math.round(img.height * scale)
+
+  const { canvas, ctx } = createCanvas(sw, sh)
+  ctx.drawImage(img, 0, 0, sw, sh)
+  const imageData = ctx.getImageData(0, 0, sw, sh)
   const { data, width, height } = imageData
 
   const maskData = new ImageData(width, height)
@@ -374,17 +379,14 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
     maskData.data[i + 3] = value
   }
 
-  const closeRadius = Math.max(3, Math.round(Math.min(width, height) * 0.05))
+  const closeRadius = Math.max(2, Math.round(Math.min(width, height) * 0.02))
   let closed = morphologyDilate(maskData, closeRadius)
   closed = morphologyErode(closed, closeRadius)
-
-  const dilateRadius = Math.max(5, Math.round(Math.min(width, height) * 0.03))
-  const dilated = morphologyDilate(closed, dilateRadius)
 
   const whitePixels: { x: number; y: number }[] = []
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (dilated.data[(y * width + x) * 4] > 128) {
+      if (closed.data[(y * width + x) * 4] > 128) {
         whitePixels.push({ x, y })
       }
     }
@@ -415,19 +417,20 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
     if (v < minV) minV = v; if (v > maxV) maxV = v
   }
 
-  const margin = Math.min(maxU - minU, maxV - minV) * 0.08
+  const margin = Math.min(maxU - minU, maxV - minV) * 0.02
   minU -= margin; maxU += margin; minV -= margin; maxV += margin
 
+  const invScale = 1 / scale
   const corners: PolygonPoint[] = [
-    { x: cx + minU * cos - minV * sin, y: cy + minU * sin + minV * cos },
-    { x: cx + maxU * cos - minV * sin, y: cy + maxU * sin + minV * cos },
-    { x: cx + maxU * cos - maxV * sin, y: cy + maxU * sin + maxV * cos },
-    { x: cx + minU * cos - maxV * sin, y: cy + minU * sin + maxV * cos },
+    { x: (cx + minU * cos - minV * sin) * invScale, y: (cy + minU * sin + minV * cos) * invScale },
+    { x: (cx + maxU * cos - minV * sin) * invScale, y: (cy + maxU * sin + minV * cos) * invScale },
+    { x: (cx + maxU * cos - maxV * sin) * invScale, y: (cy + maxU * sin + maxV * cos) * invScale },
+    { x: (cx + minU * cos - maxV * sin) * invScale, y: (cy + minU * sin + maxV * cos) * invScale },
   ]
 
   corners.forEach((c) => {
-    c.x = Math.max(0, Math.min(width, c.x))
-    c.y = Math.max(0, Math.min(height, c.y))
+    c.x = Math.max(0, Math.min(img.width, c.x))
+    c.y = Math.max(0, Math.min(img.height, c.y))
   })
 
   return corners
