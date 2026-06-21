@@ -13,10 +13,7 @@ interface DatasetStore {
   generatorBgId: string | null
   generatorObjectIds: string[]
   generatorMode: 'auto' | 'manual'
-  generatorRegionType: 'rect' | 'polygon' | null
-  generatorRegionRect: BagRect | null
-  generatorRegionPolygon: PolygonPoint[] | null
-  generatorAutoRegionPolygon: PolygonPoint[] | null
+  generatorRegions: Record<string, { type: 'rect' | 'polygon'; rect: BagRect | null; polygon: PolygonPoint[] | null; autoPolygon: PolygonPoint[] | null }>
   loadDatasets: () => Promise<void>
   createDataset: (data: Pick<Dataset, 'name' | 'categoryCount' | 'outputFormat' | 'imageSize'>) => Promise<string>
   removeDataset: (id: string) => Promise<void>
@@ -30,8 +27,7 @@ interface DatasetStore {
   setGeneratorBgId: (id: string | null) => void
   setGeneratorObjectIds: (ids: string[]) => void
   setGeneratorMode: (mode: 'auto' | 'manual') => void
-  setGeneratorRegion: (type: 'rect' | 'polygon' | null, rect: BagRect | null, polygon: PolygonPoint[] | null) => void
-  setGeneratorAutoRegion: (polygon: PolygonPoint[] | null) => void
+  setGeneratorRegion: (bgId: string, region: { type: 'rect' | 'polygon'; rect: BagRect | null; polygon: PolygonPoint[] | null; autoPolygon: PolygonPoint[] | null } | null) => void
 }
 
 const defaultParams: GenerationParams = {
@@ -65,10 +61,7 @@ export const useDatasetStore = create<DatasetStore>((set, get) => ({
   generatorBgId: null,
   generatorObjectIds: [],
   generatorMode: 'auto',
-  generatorRegionType: null,
-  generatorRegionRect: null,
-  generatorRegionPolygon: null,
-  generatorAutoRegionPolygon: null,
+  generatorRegions: {},
 
   loadDatasets: async () => {
     set({ loading: true })
@@ -149,12 +142,10 @@ export const useDatasetStore = create<DatasetStore>((set, get) => ({
   setGeneratorBgId: (id) => set({ generatorBgId: id }),
   setGeneratorObjectIds: (ids) => set({ generatorObjectIds: ids }),
   setGeneratorMode: (mode) => set({ generatorMode: mode }),
-  setGeneratorRegion: (type: 'rect' | 'polygon' | null, rect: BagRect | null, polygon: PolygonPoint[] | null) => set({
-    generatorRegionType: type,
-    generatorRegionRect: rect,
-    generatorRegionPolygon: polygon,
-  }),
-  setGeneratorAutoRegion: (polygon: PolygonPoint[] | null) => set({
-    generatorAutoRegionPolygon: polygon,
-  }),
+  setGeneratorRegion: (bgId: string, region: { type: 'rect' | 'polygon'; rect: BagRect | null; polygon: PolygonPoint[] | null; autoPolygon: PolygonPoint[] | null } | null) =>
+    set((s) => {
+      const regions = { ...s.generatorRegions }
+      if (region) regions[bgId] = region; else delete regions[bgId]
+      return { generatorRegions: regions }
+    }),
 }))

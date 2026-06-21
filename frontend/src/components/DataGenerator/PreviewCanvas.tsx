@@ -97,8 +97,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   const { objects, incrementUsage } = useObjectStore()
   const {
     params, currentDatasetId, addSamples, datasets, clearSamples,
-    generatorRegionType, generatorRegionRect, generatorRegionPolygon, generatorAutoRegionPolygon,
-    setGeneratorRegion, setGeneratorAutoRegion,
+    generatorRegions, setGeneratorRegion,
   } = useDatasetStore()
 
   const [canvasObjects, setCanvasObjects] = useState<CanvasObject[]>([])
@@ -126,6 +125,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   const bgImgRef = useRef<HTMLImageElement | null>(null)
   const fitRectRef = useRef<{ drawX: number; drawY: number; drawW: number; drawH: number } | null>(null)
   const canvasScaleRef = useRef(1)
+  const cropRectRef = useRef<CropRect | null>(null)
   const previewZoomRef = useRef(previewZoom)
   const previewPanRef = useRef(previewPan)
   previewZoomRef.current = previewZoom
@@ -157,10 +157,13 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         if (detected) {
           crop = { x: detected.x, y: detected.y, width: detected.width, height: detected.height }
           setCropRect(crop)
+          cropRectRef.current = crop
           setBagBoundary({ x: 0, y: 0, width: crop.width, height: crop.height })
           croppedImg = cropImageToRect(img, crop).croppedImg as unknown as HTMLImageElement
         } else {
-          setCropRect(null)
+      setCropRect(null)
+      cropRectRef.current = null
+          cropRectRef.current = null
           setBagBoundary({ x: 0, y: 0, width: img.width, height: img.height })
         }
 
@@ -175,14 +178,15 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         setPreviewZoom(1)
         setPreviewPan({ x: 0, y: 0 })
 
-        if (generatorRegionType === 'polygon' && generatorRegionPolygon) {
-          setUserPolygon(generatorRegionPolygon)
+        const region = generatorRegions[bg.id]
+        if (region?.type === 'polygon' && region.polygon) {
+          setUserPolygon(region.polygon)
           setUserBoundary(null)
-        } else if (generatorRegionType === 'rect' && generatorRegionRect) {
-          setUserBoundary(generatorRegionRect)
+        } else if (region?.type === 'rect' && region.rect) {
+          setUserBoundary(region.rect)
           setUserPolygon(null)
-        } else if (generatorAutoRegionPolygon) {
-          setUserPolygon(generatorAutoRegionPolygon)
+        } else if (region?.autoPolygon) {
+          setUserPolygon(region.autoPolygon)
           setUserBoundary(null)
         } else {
           setUserBoundary(null)
@@ -466,8 +470,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
             }
             setUserBoundary(ub)
             setUserPolygon(null)
-            setGeneratorRegion('rect', ub, null)
-            setGeneratorAutoRegion(null)
+            if (bg) setGeneratorRegion(bg.id, { type: 'rect', rect: ub, polygon: null, autoPolygon: null })
           }
         }
       }
@@ -478,7 +481,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
 
     if (drawMode === 'polygon') return
     setIsPanning(false)
-  }, [drawMode, rectDrawing, canvasToImageCoords, previewZoom, setGeneratorRegion, setGeneratorAutoRegion])
+  }, [drawMode, rectDrawing, canvasToImageCoords, previewZoom, setGeneratorRegion])
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (drawMode === 'rect' || drawMode === 'polygon') return
@@ -577,8 +580,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
           setDrawMode(null)
           setPolygonPoints([])
           setPolygonPreview(null)
-          setGeneratorRegion('polygon', null, imgPoints)
-          setGeneratorAutoRegion(null)
+          if (bg) setGeneratorRegion(bg.id, { type: 'polygon', rect: null, polygon: imgPoints, autoPolygon: null })
         }
       }
       if (e.key === 'Escape' && drawMode) {
@@ -590,7 +592,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleDelete, drawMode, polygonPoints, canvasToImageCoords, setGeneratorRegion, setGeneratorAutoRegion])
+  }, [handleDelete, drawMode, polygonPoints, canvasToImageCoords, setGeneratorRegion])
 
   useEffect(() => {
     const container = containerRef.current
@@ -705,6 +707,8 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
       genCanvas.width = imgW
       genCanvas.height = imgH
       const genCtx = genCanvas.getContext('2d')!
+      genCtx.fillStyle = '#ffffff'
+      genCtx.fillRect(0, 0, imgW, imgH)
       if (bgImgRef.current) genCtx.drawImage(bgImgRef.current, 0, 0)
 
       for (const { img, placement } of placementResults) {
@@ -762,6 +766,8 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
     genCanvas.width = imgW
     genCanvas.height = imgH
     const genCtx = genCanvas.getContext('2d')!
+    genCtx.fillStyle = '#ffffff'
+    genCtx.fillRect(0, 0, imgW, imgH)
     genCtx.drawImage(bgImgRef.current, 0, 0)
 
     const existingAnnotations: YOLOAnnotation[] = (bg.yoloBoxes || []).map((box) => ({
@@ -822,15 +828,18 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
   const handleAutoDetectRegion = useCallback(async () => {
     if (!bg) return
     const img = await loadImage(bg.dataUrl)
-    const corners = detectTiltedBoundary(img)
+    let corners = detectTiltedBoundary(img)
     if (corners) {
+      const crop = cropRectRef.current
+      if (crop) {
+        corners = corners.map((c) => ({ x: c.x - crop.x, y: c.y - crop.y }))
+      }
       setUserPolygon(corners)
       setUserBoundary(null)
-      setGeneratorAutoRegion(corners)
-      setGeneratorRegion('polygon', null, corners)
+      setGeneratorRegion(bg.id, { type: 'polygon', rect: null, polygon: corners, autoPolygon: corners })
     }
     renderCanvasRef.current()
-  }, [bg, setGeneratorAutoRegion, setGeneratorRegion])
+  }, [bg, setGeneratorRegion])
 
   const canGenerate = !!bg && processedObjects.length > 0
   const selectedInfo = selectedObjectIds.length > 0 ? `已选 ${selectedObjectIds.length} 个异物` : null
@@ -924,8 +933,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         {(userBoundary || activePolygon) && (
           <button onClick={() => {
             setUserBoundary(null); setUserPolygon(null)
-            setGeneratorRegion(null, null, null)
-            setGeneratorAutoRegion(null)
+            if (bg) setGeneratorRegion(bg.id, null)
             renderCanvasRef.current()
           }} className="btn-secondary text-xs px-2 py-1">
             ✕ 清除区域
