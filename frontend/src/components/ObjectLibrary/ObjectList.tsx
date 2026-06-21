@@ -12,6 +12,8 @@ interface ObjectListProps {
   onAllSelect: (id: string) => void
   onUpload: () => void
   onFolderUpload: () => void
+  onObjectsTabUpload: () => void
+  onObjectsTabFolder: () => void
   sidebarImages: UploadedImage[]
   processedUrls: Set<string>
 }
@@ -21,6 +23,7 @@ export default function ObjectList({
   pendingSelectedId, onPendingSelect,
   allSelectedId, onAllSelect,
   onUpload, onFolderUpload,
+  onObjectsTabUpload, onObjectsTabFolder,
   sidebarImages, processedUrls,
 }: ObjectListProps) {
   const { objects, searchQuery, categoryFilter, setSearchQuery, setCategoryFilter, removeObject, updateObject } = useObjectStore()
@@ -184,6 +187,16 @@ export default function ObjectList({
 
         {activeTab === 'all' && (
           <>
+            <div className="text-xs text-gray-400 mb-1.5 font-medium">导入异物</div>
+            <div className="flex gap-2 mb-3">
+              <button onClick={onObjectsTabUpload} className="btn-secondary text-xs px-3 py-1.5 flex-1">
+                上传单个异物
+              </button>
+              <button onClick={onObjectsTabFolder} className="btn-secondary text-xs px-3 py-1.5 flex-1">
+                导入文件夹
+              </button>
+            </div>
+
             {filteredAll.length === 0 && (
               <div className="text-center text-gray-400 dark:text-gray-600 text-sm mt-8">
                 {objects.length === 0 ? '暂无异物素材，请创建新的' : processedObjects.length === 0 ? '请在待处理图像中完成抠图' : '没有匹配的结果'}

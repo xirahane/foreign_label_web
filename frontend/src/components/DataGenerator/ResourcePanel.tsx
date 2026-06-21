@@ -70,36 +70,47 @@ export default function ResourcePanel({
     b.name.toLowerCase().includes(bgSearch.toLowerCase())
   )
 
-  const filteredObjs = objects.filter((o) =>
+  const processedObjs = objects.filter((o) => o.maskData && o.cutoutImage)
+
+  const filteredObjs = processedObjs.filter((o) =>
     o.name.toLowerCase().includes(objSearch.toLowerCase())
   )
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-gray-200 dark:border-gray-800">
+      <div className="p-4 pb-2 border-b border-gray-200 dark:border-gray-800">
         <h2 className="panel-title">素材资源区</h2>
-        <div className="flex gap-1 mb-2">
+        <div className="flex gap-2 mb-3">
           <button
             onClick={() => setActiveTab('backgrounds')}
-            className={`flex-1 px-2 py-1 rounded text-xs transition-all ${
+            className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'backgrounds'
-                ? 'bg-primary-500 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/25'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
             背景图 ({backgrounds.length})
           </button>
           <button
             onClick={() => setActiveTab('objects')}
-            className={`flex-1 px-2 py-1 rounded text-xs transition-all ${
+            className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'objects'
-                ? 'bg-primary-500 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                ? 'bg-primary-500 text-white shadow-md shadow-primary-500/25'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
-            异物库 ({objects.length})
+            异物库 ({processedObjs.length})
           </button>
         </div>
+        {activeTab === 'objects' && (
+          <input
+            type="text"
+            placeholder="搜索异物..."
+            value={objSearch}
+            onChange={(e) => setObjSearch(e.target.value)}
+            className="input-field text-sm"
+          />
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden">
@@ -111,13 +122,13 @@ export default function ResourcePanel({
                 placeholder="搜索背景图..."
                 value={bgSearch}
                 onChange={(e) => setBgSearch(e.target.value)}
-                className="input-field text-xs"
+                className="input-field text-sm"
               />
-              <label className="block btn-secondary text-xs text-center py-1.5 cursor-pointer">
+              <label className="block btn-secondary text-xs px-3 py-1.5 cursor-pointer text-center">
                 上传背景图
                  <input type="file" accept="image/*,.txt" multiple onChange={(e) => handleBgUpload(e.target.files)} className="hidden" />
               </label>
-              <label className="block btn-secondary text-xs text-center py-1.5 cursor-pointer">
+              <label className="block btn-secondary text-xs px-3 py-1.5 cursor-pointer text-center">
                 导入背景文件夹
                 <input
                   ref={folderInputRef}
@@ -129,7 +140,7 @@ export default function ResourcePanel({
                 />
               </label>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 grid grid-cols-2 gap-2 auto-rows-max">
+            <div className="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2 auto-rows-max">
               {filteredBgs.map((bg) => (
                 <div
                   key={bg.id}
@@ -163,21 +174,17 @@ export default function ResourcePanel({
                 </div>
               )}
             </div>
+            {filteredBgs.length > 0 && (
+              <div className="p-2 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between">
+                <span>共 {backgrounds.length} 张背景图</span>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'objects' && (
           <div className="flex flex-col h-full">
-            <div className="px-3 py-2">
-              <input
-                type="text"
-                placeholder="搜索异物..."
-                value={objSearch}
-                onChange={(e) => setObjSearch(e.target.value)}
-                className="input-field text-xs"
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
               {filteredObjs.map((obj) => {
                 const isSelected = selectedObjectIds.includes(obj.id)
                 return (
@@ -188,22 +195,25 @@ export default function ResourcePanel({
                       e.dataTransfer.setData('objectId', obj.id)
                     }}
                     onClick={() => mode === 'auto' && onToggleObject(obj.id)}
-                    className={`flex items-center gap-2 p-1.5 rounded-lg transition-colors cursor-grab active:cursor-grabbing ${
+                    className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer mb-1 transition-all ${
                       isSelected
-                        ? 'bg-primary-50 dark:bg-primary-950 ring-1 ring-primary-400'
+                        ? 'bg-primary-50 dark:bg-primary-950 ring-1 ring-primary-500'
                         : 'hover:bg-gray-50 dark:hover:bg-gray-900'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex-shrink-0 flex items-center justify-center relative">
                       {obj.thumbnail ? (
                         <img src={obj.thumbnail} alt={obj.name} className="w-full h-full object-contain" />
                       ) : (
-                        <span className="text-gray-400 text-xs">?</span>
+                        <span className="text-gray-400 text-xs">无图</span>
                       )}
+                      <div className="absolute top-0 left-0 w-4 h-4 rounded-br-md bg-primary-500 text-white text-[10px] flex items-center justify-center">
+                        ✓
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate">{obj.name}</div>
-                      <div className="text-xs text-gray-400">{obj.category}</div>
+                      <div className="text-sm font-medium truncate">{obj.name}</div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500">{obj.category}</div>
                     </div>
                     {isSelected && (
                       <span className="text-primary-500 text-xs">✓</span>
@@ -212,11 +222,16 @@ export default function ResourcePanel({
                 )
               })}
               {filteredObjs.length === 0 && (
-                <div className="text-center text-xs text-gray-400 py-8">
-                  暂无异物素材
+                <div className="text-center text-sm text-gray-400 dark:text-gray-600 mt-8">
+                  {processedObjs.length === 0 ? '暂无异物素材，请在异物库管理中完成抠图' : '没有匹配的结果'}
                 </div>
               )}
             </div>
+            {filteredObjs.length > 0 && (
+              <div className="p-2 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between">
+                <span>共 {processedObjs.length} 个异物</span>
+              </div>
+            )}
           </div>
         )}
       </div>
