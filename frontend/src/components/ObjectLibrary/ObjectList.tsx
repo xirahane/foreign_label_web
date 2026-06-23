@@ -26,7 +26,7 @@ export default function ObjectList({
   onObjectsTabUpload, onObjectsTabFolder,
   sidebarImages, processedUrls,
 }: ObjectListProps) {
-  const { objects, searchQuery, categoryFilter, setSearchQuery, setCategoryFilter, removeObject, updateObject } = useObjectStore()
+  const { objects, searchQuery, categoryFilter, setSearchQuery, setCategoryFilter, removeObject, updateObject, removeObjects } = useObjectStore()
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
 
   const presetCategories = ['点状', '条状', '片状', '块状', '其他']
@@ -133,7 +133,15 @@ export default function ObjectList({
 
             {pendingObjects.length > 0 && (
               <>
-                <div className="text-xs text-gray-400 mb-1.5 font-medium mt-2">待处理素材 ({pendingObjects.length})</div>
+                <div className="flex items-center justify-between mb-1.5 mt-2">
+                  <div className="text-xs text-gray-400 font-medium">待处理素材 ({pendingObjects.length})</div>
+                  <button
+                    onClick={() => removeObjects(pendingObjects.map(o => o.id))}
+                    className="text-xs text-red-400 hover:text-red-500"
+                  >
+                    一键清空
+                  </button>
+                </div>
                 {pendingObjects.map((obj) => (
                   <div
                     key={obj.id}
@@ -196,6 +204,17 @@ export default function ObjectList({
                 导入文件夹
               </button>
             </div>
+
+            {filteredAll.length > 0 && (
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => removeObjects(processedObjects.map(o => o.id))}
+                  className="text-xs text-red-400 hover:text-red-500"
+                >
+                  一键清空
+                </button>
+              </div>
+            )}
 
             {filteredAll.length === 0 && (
               <div className="text-center text-gray-400 dark:text-gray-600 text-sm mt-8">
