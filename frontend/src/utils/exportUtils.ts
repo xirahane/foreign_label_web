@@ -80,17 +80,6 @@ export async function exportDataset(
     const sample = samples[i]
     const idx = String(i + 1).padStart(4, '0')
     const img = await loadImg(sample.imageData)
-    const imgArea = img.width * img.height
-    const minArea = imgArea * 0.001
-
-    const expandedAnnotations = sample.annotations.map((ann) => {
-      const area = ann.width * ann.height
-      if (area < minArea && area > 0) {
-        const scaleFactor = Math.sqrt(minArea / area)
-        return { ...ann, width: ann.width * scaleFactor, height: ann.height * scaleFactor }
-      }
-      return ann
-    })
 
     const imgCanvas = document.createElement('canvas')
     imgCanvas.width = img.width
@@ -104,12 +93,12 @@ export async function exportDataset(
     )
     imagesFolder.file(`${idx}.jpg`, blob)
 
-    const labelStr = generateYOLOLabelsForSample(expandedAnnotations, img.width, img.height)
+    const labelStr = generateYOLOLabelsForSample(sample.annotations, img.width, img.height)
     labelsFolder.file(`${idx}.txt`, labelStr)
   }
 
   const classesStr = '0'
-  datasetFolder.file('classes.txt', classesStr)
+  labelsFolder.file('classes.txt', classesStr)
 
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
 }

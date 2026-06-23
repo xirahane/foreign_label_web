@@ -263,24 +263,15 @@ export default function DatasetManagement() {
                   />
                   {viewingSample.annotations.map((ann, i) => {
                     const s = imgScale || 1
-                    const imgArea = (imgRef.current?.naturalWidth || 1) * (imgRef.current?.naturalHeight || 1)
-                    const minArea = imgArea * 0.001
-                    let annW = ann.width
-                    let annH = ann.height
-                    if (annW * annH < minArea) {
-                      const scaleFactor = Math.sqrt(minArea / (annW * annH))
-                      annW *= scaleFactor
-                      annH *= scaleFactor
-                    }
                     return (
                       <div
                         key={i}
                         className="absolute border-2 border-primary-500 bg-primary-500/10"
                         style={{
-                          left: `${(ann.centerX - annW / 2) * s}px`,
-                          top: `${(ann.centerY - annH / 2) * s}px`,
-                          width: `${annW * s}px`,
-                          height: `${annH * s}px`,
+                          left: `${(ann.centerX - ann.width / 2) * s}px`,
+                          top: `${(ann.centerY - ann.height / 2) * s}px`,
+                          width: `${ann.width * s}px`,
+                          height: `${ann.height * s}px`,
                         }}
                       >
                         <span className="absolute -top-5 left-0 text-xs bg-primary-500 text-white px-1 rounded whitespace-nowrap">

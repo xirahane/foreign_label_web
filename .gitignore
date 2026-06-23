@@ -8,4 +8,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 masks_by_category/
+backgrounds/
+output/
 backend/storage/app.db

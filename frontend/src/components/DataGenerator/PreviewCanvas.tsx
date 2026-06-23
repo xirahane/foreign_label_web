@@ -11,6 +11,26 @@ import type { CanvasObject, YOLOAnnotation, YOLOBoxRaw, CropRect, PolygonPoint }
 
 interface BagRect { x: number; y: number; width: number; height: number }
 
+function polygonArea(polygon: PolygonPoint[]): number {
+  let area = 0
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    area += polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y
+  }
+  return Math.abs(area) / 2
+}
+
+function computeRegionArea(
+  polygon: PolygonPoint[] | null,
+  rect: BagRect | null,
+  bagBoundary: BagRect | null,
+  imgW: number, imgH: number
+): number {
+  if (polygon && polygon.length >= 3) return polygonArea(polygon)
+  if (rect) return rect.width * rect.height
+  if (bagBoundary) return bagBoundary.width * bagBoundary.height
+  return imgW * imgH
+}
+
 function computeFit(
   imgW: number, imgH: number,
   canvasW: number, canvasH: number
@@ -743,6 +763,17 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         } catch { /* ignore */ }
       }
 
+      const regionArea = computeRegionArea(activePolygon, userBoundary, bagBoundary, imgW, imgH)
+      const minBBoxArea = regionArea * 0.001
+      for (const ann of annotations) {
+        const bboxArea = ann.width * ann.height
+        if (bboxArea < minBBoxArea && bboxArea > 0) {
+          const scaleFactor = Math.sqrt(minBBoxArea / bboxArea)
+          ann.width *= scaleFactor
+          ann.height *= scaleFactor
+        }
+      }
+
       const genCanvas = document.createElement('canvas')
       genCanvas.width = imgW
       genCanvas.height = imgH
@@ -833,6 +864,17 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         annotations.push({ classId: 0, centerX: aabb.cx, centerY: aabb.cy, width: aabb.bw * expandRatio, height: aabb.bh * expandRatio })
         incrementUsage(co.foreignObjectId)
       } catch { /* ignore */ }
+    }
+
+    const regionArea = computeRegionArea(activePolygon, userBoundary, bagBoundary, imgW, imgH)
+    const minBBoxArea = regionArea * 0.001
+    for (const ann of annotations) {
+      const bboxArea = ann.width * ann.height
+      if (bboxArea < minBBoxArea && bboxArea > 0) {
+        const scaleFactor = Math.sqrt(minBBoxArea / bboxArea)
+        ann.width *= scaleFactor
+        ann.height *= scaleFactor
+      }
     }
 
     const imageData = genCanvas.toDataURL('image/jpeg', 0.95)

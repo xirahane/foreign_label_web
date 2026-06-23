@@ -46,7 +46,7 @@ const defaultParams: GenerationParams = {
   totalCount: 10,
   namingRule: 'image_{index}',
   exportFormat: 'yolov8',
-  edgeMargin: 20,
+  edgeMargin: 40,
 }
 
 export const useDatasetStore = create<DatasetStore>((set, get) => ({
