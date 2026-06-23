@@ -10,11 +10,16 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8080.*LISTENING"') do (
 )
 timeout /t 1 /nobreak >nul
 
-echo [2/3] Building frontend...
-cd frontend
-call npm install --silent 2>nul
-call npx vite build
-cd ..
+echo [2/3] Checking frontend...
+if exist "frontend\dist\index.html" (
+    echo   Frontend already built, skipping.
+) else (
+    echo   Building frontend...
+    cd frontend
+    call npm install --silent 2>nul
+    call npx vite build
+    cd ..
+)
 
 echo [3/3] Starting server...
 echo.
@@ -24,4 +29,5 @@ echo.
 
 start "" http://127.0.0.1:8080
 cd backend
+pip install -r requirements.txt --quiet 2>nul
 python main.py
