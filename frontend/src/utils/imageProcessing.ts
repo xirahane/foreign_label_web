@@ -362,6 +362,70 @@ function morphologyErode(
   return result
 }
 
+function convexHull(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  if (points.length < 3) return points
+  const sorted = [...points].sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x)
+  const lower: typeof sorted = []
+  for (const p of sorted) {
+    while (lower.length >= 2) {
+      const a = lower[lower.length - 2], b = lower[lower.length - 1]
+      if ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) > 0) break
+      lower.pop()
+    }
+    lower.push(p)
+  }
+  const upper: typeof sorted = []
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i]
+    while (upper.length >= 2) {
+      const a = upper[upper.length - 2], b = upper[upper.length - 1]
+      if ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) > 0) break
+      upper.pop()
+    }
+    upper.push(p)
+  }
+  upper.pop(); lower.pop()
+  return lower.concat(upper)
+}
+
+function minAreaRect(hull: Array<{ x: number; y: number }>): { corners: PolygonPoint[] } {
+  if (hull.length < 3) {
+    const xs = hull.map(p => p.x), ys = hull.map(p => p.y)
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minY = Math.min(...ys), maxY = Math.max(...ys)
+    return { corners: [{ x: minX, y: minY }, { x: maxX, y: minY }, { x: maxX, y: maxY }, { x: minX, y: maxY }] }
+  }
+
+  let bestArea = Infinity, bestCorners: PolygonPoint[] = []
+
+  for (let i = 0; i < hull.length; i++) {
+    const j = (i + 1) % hull.length
+    const dx = hull[j].x - hull[i].x, dy = hull[j].y - hull[i].y
+    const len = Math.sqrt(dx * dx + dy * dy)
+    if (len === 0) continue
+    const cos = dx / len, sin = dy / len
+
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
+    for (const p of hull) {
+      const u = p.x * cos + p.y * sin
+      const v = -p.x * sin + p.y * cos
+      if (u < minU) minU = u; if (u > maxU) maxU = u
+      if (v < minV) minV = v; if (v > maxV) maxV = v
+    }
+    const area = (maxU - minU) * (maxV - minV)
+    if (area < bestArea) {
+      bestArea = area
+      bestCorners = [
+        { x: minU * cos - minV * sin, y: minU * sin + minV * cos },
+        { x: maxU * cos - minV * sin, y: maxU * sin + minV * cos },
+        { x: maxU * cos - maxV * sin, y: maxU * sin + maxV * cos },
+        { x: minU * cos - maxV * sin, y: minU * sin + maxV * cos },
+      ]
+    }
+  }
+  return { corners: bestCorners }
+}
+
 export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | null {
   const maxDim = 400
   const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
@@ -395,10 +459,7 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
     const mB = sumB / wB
     const mF = (sumTotal - sumB) / wF
     const variance = wB * wF * (mB - mF) * (mB - mF)
-    if (variance > maxVariance) {
-      maxVariance = variance
-      otsuThreshold = t
-    }
+    if (variance > maxVariance) { maxVariance = variance; otsuThreshold = t }
   }
 
   const maskData = new ImageData(width, height)
@@ -409,7 +470,7 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
     maskData.data[i + 3] = value
   }
 
-  const closeRadius = Math.max(5, Math.round(Math.min(width, height) * 0.04))
+  const closeRadius = Math.max(7, Math.round(Math.min(width, height) * 0.06))
   let closed = morphologyDilate(maskData, closeRadius)
   closed = morphologyErode(closed, closeRadius)
 
@@ -436,9 +497,7 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
             }
           }
         }
-        if (pixels.length > 10) {
-          components.push({ pixels })
-        }
+        if (pixels.length > 10) components.push({ pixels })
       }
     }
   }
@@ -446,55 +505,26 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
   components.sort((a, b) => b.pixels.length - a.pixels.length)
   if (components.length === 0) return null
 
-  const mainPixels = components[0].pixels
-  let whitePixels = mainPixels
-
-  if (whitePixels.length < 10) return null
-
-  let cx = 0, cy = 0
-  for (const p of whitePixels) { cx += p.x; cy += p.y }
-  cx /= whitePixels.length; cy /= whitePixels.length
-
-  let pxx = 0, pyy = 0, pxy = 0
-  for (const p of whitePixels) {
-    const dx = p.x - cx, dy = p.y - cy
-    pxx += dx * dx; pyy += dy * dy; pxy += dx * dy
-  }
-  pxx /= whitePixels.length; pyy /= whitePixels.length; pxy /= whitePixels.length
-
-  function computeCorners(angle: number): { corners: PolygonPoint[]; area: number } {
-    const cos = Math.cos(angle), sin = Math.sin(angle)
-    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
-    for (const p of whitePixels) {
-      const dx = p.x - cx, dy = p.y - cy
-      const u = dx * cos + dy * sin
-      const v = -dx * sin + dy * cos
-      if (u < minU) minU = u; if (u > maxU) maxU = u
-      if (v < minV) minV = v; if (v > maxV) maxV = v
+  const maxLen = components[0].pixels.length
+  const allPoints: Array<{ x: number; y: number }> = []
+  for (const comp of components) {
+    if (comp.pixels.length >= maxLen * 0.10) {
+      for (const p of comp.pixels) allPoints.push(p)
     }
-    const margin = Math.min(maxU - minU, maxV - minV) * 0.02
-    minU -= margin; maxU += margin; minV -= margin; maxV += margin
-    const area = (maxU - minU) * (maxV - minV)
-    const invScaleX = img.width / sw
-    const invScaleY = img.height / sh
-    const corners: PolygonPoint[] = [
-      { x: (cx + minU * cos - minV * sin) * invScaleX, y: (cy + minU * sin + minV * cos) * invScaleY },
-      { x: (cx + maxU * cos - minV * sin) * invScaleX, y: (cy + maxU * sin + minV * cos) * invScaleY },
-      { x: (cx + maxU * cos - maxV * sin) * invScaleX, y: (cy + maxU * sin + maxV * cos) * invScaleY },
-      { x: (cx + minU * cos - maxV * sin) * invScaleX, y: (cy + minU * sin + maxV * cos) * invScaleY },
-    ]
-    corners.forEach((c) => {
-      c.x = Math.max(0, Math.min(img.width, Math.round(c.x)))
-      c.y = Math.max(0, Math.min(img.height, Math.round(c.y)))
-    })
-    return { corners, area }
   }
+  if (allPoints.length < 10) return null
 
-  const theta0 = 0.5 * Math.atan2(2 * pxy, pxx - pyy)
-  const result0 = computeCorners(theta0)
-  const result90 = computeCorners(theta0 + Math.PI / 2)
+  const hull = convexHull(allPoints)
+  const { corners } = minAreaRect(hull)
 
-  return result0.area <= result90.area ? result0.corners : result90.corners
+  const invScaleX = img.width / sw
+  const invScaleY = img.height / sh
+  const result: PolygonPoint[] = corners.map((c) => ({
+    x: Math.max(0, Math.min(img.width, Math.round(c.x * invScaleX))),
+    y: Math.max(0, Math.min(img.height, Math.round(c.y * invScaleY))),
+  }))
+
+  return result
 }
 
 export function drawContoursOnCanvas(

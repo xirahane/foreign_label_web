@@ -93,7 +93,7 @@ def read_existing_labels(bg_path: str) -> list[str]:
     return []
 
 
-# ─── Auto-detect tilted boundary (Otsu + largest component + dual angle) ──
+# ─── Auto-detect tilted boundary ────────────────────────────────────
 
 def _otsu_threshold(gray: np.ndarray) -> int:
     """大津法自动阈值"""
@@ -106,11 +106,9 @@ def _otsu_threshold(gray: np.ndarray) -> int:
     threshold = 128
     for t in range(256):
         w_b += hist[t]
-        if w_b == 0:
-            continue
+        if w_b == 0: continue
         w_f = total - w_b
-        if w_f == 0:
-            break
+        if w_f == 0: break
         sum_b += t * hist[t]
         m_b = sum_b / w_b
         m_f = (sum_total - sum_b) / w_f
@@ -121,23 +119,10 @@ def _otsu_threshold(gray: np.ndarray) -> int:
     return threshold
 
 
-def _largest_component(binary: np.ndarray) -> np.ndarray:
-    """保留二值图中最大的连通分量，返回仅含最大分量的图像"""
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=4)
-    if num_labels <= 1:
-        return binary
-    # 跳过背景 label 0
-    areas = stats[1:, cv2.CC_STAT_AREA]
-    max_idx = np.argmax(areas) + 1
-    result = np.zeros_like(binary)
-    result[labels == max_idx] = 255
-    return result
-
-
 def detect_tilted_boundary(img: np.ndarray, max_dim: int = 400) -> Optional[np.ndarray]:
     """
     自动检测 X 光图中异物的倾斜生成区域。
-    使用 Otsu 阈值 + 形态学闭运算 + 最大连通分量 + PCA 双方向择优。
+    使用百分位阈值 + 形态学闭运算 + 多连通分量合并 + 凸包最小面积矩形。
     返回 4 个角点的 numpy 数组 shape=(4,2)，或 None。
     """
     h, w = img.shape[:2]
@@ -151,65 +136,58 @@ def detect_tilted_boundary(img: np.ndarray, max_dim: int = 400) -> Optional[np.n
         gray = small
     else:
         gray = small[:, :, 0] if small.shape[2] >= 1 else small
+
+    # Otsu 阈值分割
     otsu_thresh = _otsu_threshold(gray)
     _, binary = cv2.threshold(gray, otsu_thresh, 255, cv2.THRESH_BINARY_INV)
 
-    # 形态学闭运算 – 融合碎片化暗区
-    close_ksize = max(5, int(min(sw, sh) * 0.04))
+    # 形态学闭运算 — 6% 核融合碎片化暗区
+    close_ksize = max(7, int(min(sw, sh) * 0.06))
     if close_ksize % 2 == 0:
         close_ksize += 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_ksize, close_ksize))
     closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    # 只保留最大连通分量
-    main_component = _largest_component(closed)
-
-    ys, xs = np.where(main_component > 128)
-    if len(xs) < 10:
+    # 提取所有连通分量，保留面积 ≥ 最大分量 10% 的
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(closed, connectivity=4)
+    if num_labels <= 1:
         return None
 
-    # PCA 求主方向
-    cx = np.mean(xs)
-    cy = np.mean(ys)
-    dx = xs - cx
-    dy = ys - cy
-    pxx = np.mean(dx * dx)
-    pyy = np.mean(dy * dy)
-    pxy = np.mean(dx * dy)
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    if len(areas) == 0:
+        return None
+    max_area = areas.max()
+    min_keep = max_area * 0.10
 
-    def _compute_corners(angle: float):
-        cos_t, sin_t = np.cos(angle), np.sin(angle)
-        u = dx * cos_t + dy * sin_t
-        v = -dx * sin_t + dy * cos_t
-        min_u, max_u = u.min(), u.max()
-        min_v, max_v = v.min(), v.max()
+    merged = np.zeros_like(closed)
+    for i in range(1, num_labels):
+        if stats[i, cv2.CC_STAT_AREA] >= min_keep:
+            merged[labels == i] = 255
 
-        margin = min(max_u - min_u, max_v - min_v) * 0.02
-        min_u -= margin; max_u += margin
-        min_v -= margin; max_v += margin
+    if merged.sum() == 0:
+        return None
 
-        inv_sx = w / sw
-        inv_sy = h / sh
+    # 凸包
+    ys_px, xs_px = np.where(merged > 128)
+    pts = np.column_stack([xs_px, ys_px]).astype(np.float32)
+    hull = cv2.convexHull(pts)
 
-        corners = np.array([
-            [cx + min_u * cos_t - min_v * sin_t, cy + min_u * sin_t + min_v * cos_t],
-            [cx + max_u * cos_t - min_v * sin_t, cy + max_u * sin_t + min_v * cos_t],
-            [cx + max_u * cos_t - max_v * sin_t, cy + max_u * sin_t + max_v * cos_t],
-            [cx + min_u * cos_t - max_v * sin_t, cy + min_u * sin_t + max_v * cos_t],
-        ], dtype=np.float64)
-        corners[:, 0] *= inv_sx
-        corners[:, 1] *= inv_sy
-        corners[:, 0] = np.clip(corners[:, 0], 0, w)
-        corners[:, 1] = np.clip(corners[:, 1], 0, h)
+    if hull is None or len(hull) < 3:
+        return None
 
-        area = (max_u - min_u) * (max_v - min_v)
-        return corners.astype(np.int32), area
+    # 最小面积旋转矩形
+    rect = cv2.minAreaRect(hull)
+    corners = cv2.boxPoints(rect).astype(np.float64)
 
-    theta0 = 0.5 * np.arctan2(2 * pxy, pxx - pyy)
-    corners0, area0 = _compute_corners(theta0)
-    corners90, area90 = _compute_corners(theta0 + np.pi / 2)
+    # 缩放回原图
+    inv_sx = w / sw
+    inv_sy = h / sh
+    corners[:, 0] *= inv_sx
+    corners[:, 1] *= inv_sy
+    corners[:, 0] = np.clip(corners[:, 0], 0, w)
+    corners[:, 1] = np.clip(corners[:, 1], 0, h)
 
-    return corners0 if area0 <= area90 else corners90
+    return corners.astype(np.int32)
 
 
 def draw_polygon_on_image(img: np.ndarray, corners: np.ndarray, color=(0, 255, 0)) -> np.ndarray:
