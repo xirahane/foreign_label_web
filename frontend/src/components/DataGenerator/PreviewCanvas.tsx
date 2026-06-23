@@ -265,14 +265,23 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         }
         ctx.closePath()
         ctx.stroke()
-      } else if (activeRect && !cropRect) {
+      } else if (userBoundary) {
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)'
+        ctx.lineWidth = 3
+        ctx.setLineDash([])
+        const bx = drawX + userBoundary.x * scale
+        const by = drawY + userBoundary.y * scale
+        const bw = userBoundary.width * scale
+        const bh = userBoundary.height * scale
+        ctx.strokeRect(bx, by, bw, bh)
+      } else if (bagBoundary && !cropRect) {
         ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)'
         ctx.lineWidth = 2
         ctx.setLineDash([6, 3])
-        const bx = drawX + activeRect.x * scale
-        const by = drawY + activeRect.y * scale
-        const bw = activeRect.width * scale
-        const bh = activeRect.height * scale
+        const bx = drawX + bagBoundary.x * scale
+        const by = drawY + bagBoundary.y * scale
+        const bw = bagBoundary.width * scale
+        const bh = bagBoundary.height * scale
         ctx.strokeRect(bx, by, bw, bh)
         ctx.setLineDash([])
 
@@ -316,7 +325,6 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
           } catch { /* ignore */ }
 
           drawWithEdgeBlend(ctx, img, cx, cy, cw2, ch2, co.rotation, {
-            strength: params.edgeBlendStrength,
             blendMode: params.blendMode,
             bgMean,
             opacity: co.opacity,
@@ -702,12 +710,12 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
     const imgH = bgImgRef.current!.height
     const boundary = getBoundary()
 
-    const existingAnnotations: YOLOAnnotation[] = (bg.yoloBoxes || []).map((box) => ({
+    const existingAnnotations: YOLOAnnotation[] = yoloBoxes.map((box) => ({
       classId: 0,
-      centerX: box.centerX,
-      centerY: box.centerY,
-      width: box.width,
-      height: box.height,
+      centerX: box.centerX * imgW,
+      centerY: box.centerY * imgH,
+      width: box.width * imgW,
+      height: box.height * imgH,
     }))
 
     for (let i = 0; i < params.totalCount; i++) {
@@ -761,11 +769,11 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
           }
         } catch { /* ignore */ }
         drawWithEdgeBlend(genCtx, img, placement.x, placement.y, placement.width, placement.height, placement.rotation, {
-          strength: params.edgeBlendStrength,
           blendMode: params.blendMode,
           bgMean,
           opacity: placement.opacity,
         })
+
       }
 
       if (params.blurVariance || params.brightnessVariance || params.contrastVariance) {
@@ -788,7 +796,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
 
     await addSamples(samples)
     setIsGenerating(false)
-  }, [bg, objects, selectedObjectIds, currentDatasetId, params, addSamples, incrementUsage, getActiveObjects, getBoundary])
+  }, [bg, objects, selectedObjectIds, currentDatasetId, params, addSamples, incrementUsage, getActiveObjects, getBoundary, yoloBoxes])
 
   const handleManualGenerate = useCallback(async () => {
     if (!bg || !currentDatasetId || canvasObjects.length === 0 || !bgImgRef.current) return
@@ -802,8 +810,9 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
     genCtx.fillRect(0, 0, imgW, imgH)
     genCtx.drawImage(bgImgRef.current, 0, 0)
 
-    const existingAnnotations: YOLOAnnotation[] = (bg.yoloBoxes || []).map((box) => ({
-      classId: 0, centerX: box.centerX, centerY: box.centerY, width: box.width, height: box.height,
+    const existingAnnotations: YOLOAnnotation[] = yoloBoxes.map((box) => ({
+      classId: 0, centerX: box.centerX * imgW, centerY: box.centerY * imgH,
+      width: box.width * imgW, height: box.height * imgH,
     }))
     const annotations: YOLOAnnotation[] = [...existingAnnotations]
 
@@ -827,7 +836,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
           }
         } catch { /* ignore */ }
         drawWithEdgeBlend(genCtx, img, co.x, co.y, co.width, co.height, co.rotation, {
-          strength: params.edgeBlendStrength, blendMode: params.blendMode, bgMean, opacity: co.opacity,
+          blendMode: params.blendMode, bgMean, opacity: co.opacity,
         })
         const expandRatio = params.bboxStrategy === 'expand' ? 1 + params.bboxExpandRatio / 100 : 1
         const aabb = rotatedAABB(co.x, co.y, co.width, co.height, co.rotation)
@@ -849,7 +858,7 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
     const imageData = genCanvas.toDataURL('image/jpeg', 0.95)
     await addSamples([{ imageData, annotations, datasetId: currentDatasetId, generatedAt: Date.now() }])
     setCanvasObjects([])
-  }, [bg, currentDatasetId, canvasObjects, params, objects, addSamples, incrementUsage])
+  }, [bg, currentDatasetId, canvasObjects, params, objects, addSamples, incrementUsage, yoloBoxes])
 
   const handleOverwriteGenerate = useCallback(async () => {
     if (!bg || !currentDatasetId) return

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { db } from '@/db/db'
+import { useBackgroundStore } from '@/stores/backgroundStore'
 import type { Dataset, DatasetSample, GenerationParams, PolygonPoint } from '@/types'
 
 interface BagRect { x: number; y: number; width: number; height: number }
@@ -15,8 +16,9 @@ interface DatasetStore {
   generatorMode: 'auto' | 'manual'
   generatorRegions: Record<string, { type: 'rect' | 'polygon'; rect: BagRect | null; polygon: PolygonPoint[] | null; autoPolygon: PolygonPoint[] | null }>
   loadDatasets: () => Promise<void>
-  createDataset: (data: Pick<Dataset, 'name' | 'categoryCount' | 'outputFormat' | 'imageSize'>) => Promise<string>
+  createDataset: (data: Pick<Dataset, 'name' | 'categoryCount' | 'outputFormat'>) => Promise<string>
   removeDataset: (id: string) => Promise<void>
+  renameDataset: (id: string, name: string) => Promise<void>
   selectDataset: (id: string) => Promise<void>
   loadSamples: (datasetId: string) => Promise<void>
   addSamples: (samples: Omit<DatasetSample, 'id'>[]) => Promise<void>
@@ -41,7 +43,6 @@ const defaultParams: GenerationParams = {
   blurVariance: false,
   brightnessVariance: false,
   contrastVariance: false,
-  edgeBlendStrength: 50,
   blendMode: 'direct',
   bboxStrategy: 'tight',
   bboxExpandRatio: 10,
@@ -85,7 +86,14 @@ export const useDatasetStore = create<DatasetStore>((set, get) => ({
   removeDataset: async (id) => {
     await db.datasets.delete(id)
     await db.datasetSamples.where('datasetId').equals(id).delete()
+    await db.backgroundImages.where('datasetId').equals(id).delete()
     if (get().currentDatasetId === id) set({ currentDatasetId: null, currentSamples: [] })
+    await get().loadDatasets()
+    await useBackgroundStore.getState().loadBackgrounds()
+  },
+
+  renameDataset: async (id, name) => {
+    await db.datasets.update(id, { name })
     await get().loadDatasets()
   },
 

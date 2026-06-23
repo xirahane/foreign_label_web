@@ -47,7 +47,9 @@ export default function ResourcePanel({
     if (imageFiles.length === 0) return
 
     const currentBgs = useBackgroundStore.getState().backgrounds
-    const existingNames = new Set(currentBgs.map((b) => b.name.replace(/\s*\(\d+\)\s*$/, '').trim()))
+    const datasetId = useDatasetStore.getState().currentDatasetId
+    const datasetBgs = currentBgs.filter((b) => !b.datasetId || b.datasetId === datasetId)
+    const existingNames = new Set(datasetBgs.map((b) => b.name.replace(/\s*\(\d+\)\s*$/, '').trim()))
     const skippedNames: string[] = []
 
     const txtMap = new Map<string, YOLOBoxRaw[]>()
@@ -74,7 +76,7 @@ export default function ResourcePanel({
               dataUrl: ev.target?.result as string,
               width: img.width,
               height: img.height,
-              datasetId: currentDatasetId || undefined,
+              datasetId: datasetId || undefined,
               yoloBoxes: txtMap.get(baseName),
             })
           }
@@ -83,9 +85,7 @@ export default function ResourcePanel({
         reader.readAsDataURL(file)
       })
       if (skippedNames.length > 0) {
-        setTimeout(() => {
-          alert(`以下 ${skippedNames.length} 个背景已存在，已跳过：\n${skippedNames.join('\n')}`)
-        }, 100)
+        alert(`以下 ${skippedNames.length} 个背景已存在，已跳过：\n${skippedNames.join('\n')}`)
       }
     })
   }, [addBackground])

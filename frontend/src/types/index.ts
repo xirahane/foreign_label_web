@@ -46,7 +46,6 @@ export interface Dataset {
   name: string
   categoryCount: number
   outputFormat: ExportFormat
-  imageSize: { width: number; height: number }
   createdAt: number
   generatedImages: number
   labelCount: number
@@ -79,7 +78,6 @@ export interface GenerationParams {
   blurVariance: boolean
   brightnessVariance: boolean
   contrastVariance: boolean
-  edgeBlendStrength: number
   blendMode: BlendMode
   bboxStrategy: 'tight' | 'expand'
   bboxExpandRatio: number

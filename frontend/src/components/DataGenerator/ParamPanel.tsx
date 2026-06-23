@@ -47,7 +47,7 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                缩放范围
+                异物缩放范围
               </label>
               <div className="flex items-center gap-1 mb-1">
                 <input
@@ -81,7 +81,7 @@ export default function ParamPanel() {
 
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                旋转角度
+                异物旋转角
               </label>
               <div className="flex items-center gap-1 mb-1">
                 <input
@@ -150,25 +150,6 @@ export default function ParamPanel() {
                 />
                 随机对比度
               </label>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
-                边缘融合强度
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range" min={0} max={100} value={params.edgeBlendStrength}
-                  onChange={(e) => updateParams({ edgeBlendStrength: Number(e.target.value) })}
-                  className="flex-1"
-                />
-                <input
-                  type="number" min={0} max={100}
-                  value={params.edgeBlendStrength}
-                  onChange={(e) => updateParams({ edgeBlendStrength: Number(e.target.value) })}
-                  className="input-field text-xs w-14 text-center"
-                />
-              </div>
             </div>
 
             <div>

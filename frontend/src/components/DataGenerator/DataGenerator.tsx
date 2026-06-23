@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useDatasetStore } from '@/stores/datasetStore'
 import { useObjectStore } from '@/stores/objectStore'
 import ResourcePanel from './ResourcePanel'
@@ -12,6 +13,20 @@ export default function DataGenerator() {
     setGeneratorBgId, setGeneratorObjectIds, setGeneratorMode,
   } = useDatasetStore()
   const objects = useObjectStore((s) => s.objects)
+  const currentDataset = datasets.find((d) => d.id === currentDatasetId)
+  const location = useLocation()
+
+  useEffect(() => {
+    setGeneratorBgId(null)
+    setGeneratorObjectIds([])
+  }, [currentDatasetId])
+  useEffect(() => {
+    const state = location.state as { datasetId?: string } | null
+    if (state?.datasetId && state.datasetId !== currentDatasetId) {
+      selectDataset(state.datasetId)
+    }
+  }, [])
+
   const processedObjIds = useMemo(() =>
     objects.filter((o) => o.maskData && o.cutoutImage).map((o) => o.id),
     [objects])
@@ -112,6 +127,11 @@ export default function DataGenerator() {
               手动模式
             </button>
           </div>
+          {currentDataset && (
+            <span className="text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950 px-2 py-0.5 rounded">
+              📁 {currentDataset.name}
+            </span>
+          )}
           <span className="text-xs text-gray-400">
             {generatorMode === 'auto'
               ? '自动随机放置异物，点击左侧异物可多选限定范围'

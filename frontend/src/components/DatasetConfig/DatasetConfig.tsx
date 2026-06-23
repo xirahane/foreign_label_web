@@ -5,15 +5,15 @@ import { useObjectStore } from '@/stores/objectStore'
 import type { ExportFormat } from '@/types'
 
 export default function DatasetConfig() {
-  const { datasets, loadDatasets, createDataset, removeDataset } = useDatasetStore()
+  const { datasets, loadDatasets, createDataset, removeDataset, renameDataset } = useDatasetStore()
   const { objects, loadObjects } = useObjectStore()
   const navigate = useNavigate()
 
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [outputFormat, setOutputFormat] = useState<ExportFormat>('yolov8')
-  const [imgWidth, setImgWidth] = useState(640)
-  const [imgHeight, setImgHeight] = useState(640)
+  const [editingDsId, setEditingDsId] = useState<string | null>(null)
+  const [editingDsName, setEditingDsName] = useState('')
 
   useEffect(() => {
     loadDatasets()
@@ -27,7 +27,6 @@ export default function DatasetConfig() {
       name: name.trim(),
       categoryCount: categories.size,
       outputFormat,
-      imageSize: { width: imgWidth, height: imgHeight },
     })
     setName('')
     setShowForm(false)
@@ -36,6 +35,19 @@ export default function DatasetConfig() {
 
   const handleViewDataset = (id: string) => {
     navigate('/generator', { state: { datasetId: id } })
+  }
+
+  const startRename = (id: string, currentName: string) => {
+    setEditingDsId(id)
+    setEditingDsName(currentName)
+  }
+
+  const handleRename = async (id: string) => {
+    if (editingDsName.trim()) {
+      await renameDataset(id, editingDsName.trim())
+    }
+    setEditingDsId(null)
+    setEditingDsName('')
   }
 
   const formatDate = (ts: number) => {
@@ -78,14 +90,6 @@ export default function DatasetConfig() {
                   <option value="coco">COCO（预留）</option>
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">图片宽度 (px)</label>
-                <input type="number" value={imgWidth} onChange={(e) => setImgWidth(Number(e.target.value))} className="input-field" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 block">图片高度 (px)</label>
-                <input type="number" value={imgHeight} onChange={(e) => setImgHeight(Number(e.target.value))} className="input-field" />
-              </div>
             </div>
             <div className="flex items-center gap-2 mt-4">
               <button onClick={handleCreate} disabled={!name.trim()} className="btn-primary">
@@ -98,9 +102,22 @@ export default function DatasetConfig() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {datasets.map((ds) => (
-            <div key={ds.id} className="card p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleViewDataset(ds.id)}>
+            <div key={ds.id} className="card p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => editingDsId !== ds.id && handleViewDataset(ds.id)}>
               <div className="flex items-start justify-between mb-3">
-                <h3 className="font-semibold text-sm">{ds.name}</h3>
+                {editingDsId === ds.id ? (
+                  <input
+                    type="text"
+                    value={editingDsName}
+                    onChange={(e) => setEditingDsName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleRename(ds.id); if (e.key === 'Escape') { setEditingDsId(null); setEditingDsName('') } }}
+                    onBlur={() => handleRename(ds.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="input-field text-sm font-semibold"
+                    autoFocus
+                  />
+                ) : (
+                  <h3 className="font-semibold text-sm">{ds.name}</h3>
+                )}
                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary-50 dark:bg-primary-950 text-primary-600 dark:text-primary-400">
                   {ds.outputFormat.toUpperCase()}
                 </span>
@@ -118,19 +135,23 @@ export default function DatasetConfig() {
                   <span className="block text-gray-400">类别</span>
                   <span className="font-medium text-gray-700 dark:text-gray-300">{ds.categoryCount}</span>
                 </div>
-                <div>
-                  <span className="block text-gray-400">尺寸</span>
-                  <span className="font-medium text-gray-700 dark:text-gray-300">{ds.imageSize.width}x{ds.imageSize.height}</span>
-                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">{formatDate(ds.createdAt)}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeDataset(ds.id) }}
-                  className="text-xs text-red-400 hover:text-red-500"
-                >
-                  删除
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startRename(ds.id, ds.name) }}
+                    className="text-xs text-gray-400 hover:text-primary-500"
+                  >
+                    重命名
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeDataset(ds.id) }}
+                    className="text-xs text-red-400 hover:text-red-500"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
             </div>
           ))}

@@ -12,7 +12,7 @@ export default function DatasetManagement() {
   const { objects } = useObjectStore()
   const [viewingSampleIdx, setViewingSampleIdx] = useState(0)
   const [imgScale, setImgScale] = useState(1)
-  const [lastDeleted, setLastDeleted] = useState<DatasetSample[] | null>(null)
+  const [lastDeleted, setLastDeleted] = useState<Record<string, DatasetSample[]>>({})
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -50,7 +50,7 @@ export default function DatasetManagement() {
 
   const handleDeleteSample = useCallback(() => {
     if (viewingSample) {
-      setLastDeleted([viewingSample])
+      setLastDeleted((prev) => ({ ...prev, [currentDatasetId!]: [viewingSample] }))
       removeSample(viewingSample.id)
       if (viewingSampleIdx >= currentSamples.length - 1) {
         setViewingSampleIdx(Math.max(0, viewingSampleIdx - 1))
@@ -60,7 +60,7 @@ export default function DatasetManagement() {
 
   const handleDeleteAll = useCallback(async () => {
     if (currentSamples.length === 0) return
-    setLastDeleted([...currentSamples])
+    setLastDeleted((prev) => ({ ...prev, [currentDatasetId!]: [...currentSamples] }))
     await clearSamples()
     setViewingSampleIdx(0)
   }, [currentSamples, clearSamples])
@@ -72,11 +72,13 @@ export default function DatasetManagement() {
   }, [currentSamples.length, viewingSampleIdx])
 
   const handleUndo = useCallback(async () => {
-    if (!lastDeleted || lastDeleted.length === 0) return
-    const toRestore = lastDeleted.map(({ id, ...rest }) => rest)
+    if (!currentDatasetId) return
+    const del = lastDeleted[currentDatasetId]
+    if (!del || del.length === 0) return
+    const toRestore = del.map(({ id, ...rest }) => rest)
     await addSamples(toRestore)
-    setLastDeleted(null)
-  }, [lastDeleted, addSamples])
+    setLastDeleted((prev) => { const next = { ...prev }; delete next[currentDatasetId]; return next })
+  }, [lastDeleted, currentDatasetId, addSamples])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -191,10 +193,14 @@ export default function DatasetManagement() {
               <span>标注: {currentDataset?.labelCount}</span>
               <span>类别: {currentDataset?.categoryCount}</span>
               <span>格式: {currentDataset?.outputFormat.toUpperCase()}</span>
-              <span>尺寸: {currentDataset?.imageSize.width}x{currentDataset?.imageSize.height}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {lastDeleted[currentDatasetId!] && lastDeleted[currentDatasetId!].length > 0 && (
+              <button onClick={handleUndo} className="btn-danger text-xs">
+                ↩ 撤销删除 ({lastDeleted[currentDatasetId!].length})
+              </button>
+            )}
             <button
               onClick={() => navigate('/generator')}
               className="btn-secondary text-xs"
@@ -322,14 +328,6 @@ export default function DatasetManagement() {
               >
                 删除全部
               </button>
-              {lastDeleted && lastDeleted.length > 0 && (
-                <button
-                  onClick={handleUndo}
-                  className="btn-secondary text-xs px-3 py-1 text-green-500"
-                >
-                  ↩ 撤销删除 ({lastDeleted.length})
-                </button>
-              )}
             </div>
           </div>
         )}

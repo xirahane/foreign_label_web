@@ -87,6 +87,8 @@ export function cropImageToRect(
   canvas.width = crop.width
   canvas.height = crop.height
   const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, crop.width, crop.height)
   ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height)
   const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
   return { dataUrl, croppedImg: canvas as unknown as HTMLImageElement }
@@ -420,17 +422,18 @@ export function detectTiltedBoundary(img: HTMLImageElement): PolygonPoint[] | nu
   const margin = Math.min(maxU - minU, maxV - minV) * 0.02
   minU -= margin; maxU += margin; minV -= margin; maxV += margin
 
-  const invScale = 1 / scale
+  const invScaleX = img.width / sw
+  const invScaleY = img.height / sh
   const corners: PolygonPoint[] = [
-    { x: (cx + minU * cos - minV * sin) * invScale, y: (cy + minU * sin + minV * cos) * invScale },
-    { x: (cx + maxU * cos - minV * sin) * invScale, y: (cy + maxU * sin + minV * cos) * invScale },
-    { x: (cx + maxU * cos - maxV * sin) * invScale, y: (cy + maxU * sin + maxV * cos) * invScale },
-    { x: (cx + minU * cos - maxV * sin) * invScale, y: (cy + minU * sin + maxV * cos) * invScale },
+    { x: (cx + minU * cos - minV * sin) * invScaleX, y: (cy + minU * sin + minV * cos) * invScaleY },
+    { x: (cx + maxU * cos - minV * sin) * invScaleX, y: (cy + maxU * sin + minV * cos) * invScaleY },
+    { x: (cx + maxU * cos - maxV * sin) * invScaleX, y: (cy + maxU * sin + maxV * cos) * invScaleY },
+    { x: (cx + minU * cos - maxV * sin) * invScaleX, y: (cy + minU * sin + maxV * cos) * invScaleY },
   ]
 
   corners.forEach((c) => {
-    c.x = Math.max(0, Math.min(img.width, c.x))
-    c.y = Math.max(0, Math.min(img.height, c.y))
+    c.x = Math.max(0, Math.min(img.width, Math.round(c.x)))
+    c.y = Math.max(0, Math.min(img.height, Math.round(c.y)))
   })
 
   return corners
@@ -510,7 +513,6 @@ export function trimTransparent(canvas: HTMLCanvasElement): string {
 }
 
 export interface BlendOptions {
-  strength: number
   blendMode?: import('@/types').BlendMode
   bgMean?: number
   opacity?: number
@@ -627,22 +629,10 @@ export function drawWithEdgeBlend(
     }
   }
 
-  if (options.blendMode === 'feather') {
-    const blurRadius = Math.max(0, (options.strength / 100) * 10)
-    if (blurRadius > 0) {
-      const blurredAlpha = boxBlurAlpha(imageData, blurRadius)
-      imageData.data.set(blurredAlpha)
-    }
-    tempCtx.putImageData(imageData, 0, 0)
-    applyOpacity(options.opacity ?? 1)
-    ctx.drawImage(tempCanvas, x, y, width, height)
-    ctx.globalAlpha = 1
-  } else {
-    tempCtx.putImageData(imageData, 0, 0)
-    applyOpacity(options.opacity ?? 1)
-    ctx.drawImage(tempCanvas, x, y, width, height)
-    ctx.globalAlpha = 1
-  }
+  tempCtx.putImageData(imageData, 0, 0)
+  applyOpacity(options.opacity ?? 1)
+  ctx.drawImage(tempCanvas, x, y, width, height)
+  ctx.globalAlpha = 1
 
   ctx.restore()
 }
