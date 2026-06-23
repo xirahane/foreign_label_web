@@ -113,45 +113,6 @@ export default function ParamPanel() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={params.opacityVariance}
-                  onChange={(e) => updateParams({ opacityVariance: e.target.checked })}
-                  className="rounded"
-                />
-                随机透明度
-              </label>
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={params.blurVariance}
-                  onChange={(e) => updateParams({ blurVariance: e.target.checked })}
-                  className="rounded"
-                />
-                随机模糊
-              </label>
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={params.brightnessVariance}
-                  onChange={(e) => updateParams({ brightnessVariance: e.target.checked })}
-                  className="rounded"
-                />
-                随机亮度
-              </label>
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={params.contrastVariance}
-                  onChange={(e) => updateParams({ contrastVariance: e.target.checked })}
-                  className="rounded"
-                />
-                随机对比度
-              </label>
-            </div>
-
             <div>
               <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
                 融合模式

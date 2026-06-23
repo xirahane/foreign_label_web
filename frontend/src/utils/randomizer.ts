@@ -62,7 +62,7 @@ export function generatePlacement(
   }
 
   const rotation = randomInRange(params.rotationMin, params.rotationMax)
-  const opacity = params.opacityVariance ? randomInRange(0.6, 1.0) : 1.0
+  const opacity = 1.0
 
   if (polygon && polygon.length >= 3) {
     const polygonBounds = {

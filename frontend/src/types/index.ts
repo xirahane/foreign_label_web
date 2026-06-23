@@ -74,10 +74,6 @@ export interface GenerationParams {
   scaleMax: number
   rotationMin: number
   rotationMax: number
-  opacityVariance: boolean
-  blurVariance: boolean
-  brightnessVariance: boolean
-  contrastVariance: boolean
   blendMode: BlendMode
   bboxStrategy: 'tight' | 'expand'
   bboxExpandRatio: number

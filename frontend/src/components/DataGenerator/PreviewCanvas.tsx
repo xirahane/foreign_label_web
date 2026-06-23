@@ -776,16 +776,6 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
 
       }
 
-      if (params.blurVariance || params.brightnessVariance || params.contrastVariance) {
-        const filters: string[] = []
-        if (params.blurVariance) filters.push(`blur(${Math.random() * 2}px)`)
-        if (params.brightnessVariance) filters.push(`brightness(${0.85 + Math.random() * 0.3})`)
-        if (params.contrastVariance) filters.push(`contrast(${0.85 + Math.random() * 0.3})`)
-        genCtx.filter = filters.join(' ')
-        genCtx.drawImage(genCanvas, 0, 0)
-        genCtx.filter = 'none'
-      }
-
       const imageData = genCanvas.toDataURL('image/jpeg', 0.95)
       samples.push({ imageData, annotations, datasetId: currentDatasetId, generatedAt: Date.now() })
       for (const { obj } of placementResults) incrementUsage(obj.id)
@@ -843,16 +833,6 @@ export default function PreviewCanvas({ currentBgId, selectedObjectIds, mode }: 
         annotations.push({ classId: 0, centerX: aabb.cx, centerY: aabb.cy, width: aabb.bw * expandRatio, height: aabb.bh * expandRatio })
         incrementUsage(co.foreignObjectId)
       } catch { /* ignore */ }
-    }
-
-    if (params.blurVariance || params.brightnessVariance || params.contrastVariance) {
-      const filters: string[] = []
-      if (params.blurVariance) filters.push(`blur(${Math.random() * 2}px)`)
-      if (params.brightnessVariance) filters.push(`brightness(${0.85 + Math.random() * 0.3})`)
-      if (params.contrastVariance) filters.push(`contrast(${0.85 + Math.random() * 0.3})`)
-      genCtx.filter = filters.join(' ')
-      genCtx.drawImage(genCanvas, 0, 0)
-      genCtx.filter = 'none'
     }
 
     const imageData = genCanvas.toDataURL('image/jpeg', 0.95)
