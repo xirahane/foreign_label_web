@@ -214,7 +214,10 @@ def detect_tilted_boundary(img: np.ndarray, max_dim: int = 400) -> Optional[np.n
 
 def draw_polygon_on_image(img: np.ndarray, corners: np.ndarray, color=(0, 255, 0)) -> np.ndarray:
     """在图像上绘制多边形框，用于可视化"""
-    vis = img.copy()
+    if len(img.shape) == 2:
+        vis = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    else:
+        vis = img.copy()
     if corners is not None and len(corners) >= 3:
         pts = corners.reshape((-1, 1, 2))
         cv2.polylines(vis, [pts], isClosed=True, color=color, thickness=2)
