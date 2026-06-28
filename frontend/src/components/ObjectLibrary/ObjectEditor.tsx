@@ -28,14 +28,14 @@ export interface UploadedImage {
 }
 
 export default function ObjectEditor({ editingId, onNew, uploadTrigger, folderTrigger, onImagesUploaded, onImageProcessed }: ObjectEditorProps) {
-  const PRESET_CATEGORIES = ['点状', '条状', '片状', '块状', '其他']
+  const PRESET_CATEGORIES = ['线状异物', '球状异物', '块状异物', '环状异物', '点状异物', '大异物']
   const { objects, addObject, updateObject, removeObjects } = useObjectStore()
 
   const [tool, setTool] = useState<Tool>('brush')
   const [brushSize, setBrushSize] = useState(5)
   const [zoom, setZoom] = useState(1)
   const [newName, setNewName] = useState('')
-  const [maskCat, setMaskCat] = useState('点状')
+  const [maskCat, setMaskCat] = useState('线状异物')
   const [showCustomCat, setShowCustomCat] = useState(false)
   const [pendingLoadVer, setPendingLoadVer] = useState(0)
   const [customCatInput, setCustomCatInput] = useState('')
@@ -110,7 +110,7 @@ export default function ObjectEditor({ editingId, onNew, uploadTrigger, folderTr
   useEffect(() => {
     if (editingId && editObj) {
       setNewName(editObj.name)
-      setMaskCat(editObj.category || '点状')
+      setMaskCat(editObj.category || '线状异物')
       setShowCustomCat(false)
       setCustomCatInput('')
       setPreviewSrc(editObj.cutoutImage || editObj.thumbnail)
@@ -157,7 +157,7 @@ export default function ObjectEditor({ editingId, onNew, uploadTrigger, folderTr
     setBrushSize(5)
     setZoom(1)
     setNewName('')
-    setMaskCat('点状')
+    setMaskCat('线状异物')
     setShowCustomCat(false)
     setCustomCatInput('')
     setOriginalSrc(null)
@@ -418,7 +418,7 @@ export default function ObjectEditor({ editingId, onNew, uploadTrigger, folderTr
 
         await addObject({
           name: baseName || '未命名异物',
-          category: maskCat || '点状',
+          category: maskCat || '线状异物',
           thumbnail: await createThumbnail(finalSrc),
           originalImage: finalSrc,
           maskData: '',
@@ -429,7 +429,7 @@ export default function ObjectEditor({ editingId, onNew, uploadTrigger, folderTr
         const { finalSrc, finalW, finalH, finalBoxes } = await processImageWithCropAndYOLO(dataUrl, baseName, yoloRaw)
         await addObject({
           name: baseName || '未命名异物',
-          category: maskCat || '点状',
+          category: maskCat || '线状异物',
           thumbnail: await createThumbnail(finalSrc),
           originalImage: finalSrc,
           maskData: '',

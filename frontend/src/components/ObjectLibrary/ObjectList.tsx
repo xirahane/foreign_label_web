@@ -29,7 +29,7 @@ export default function ObjectList({
   const { objects, searchQuery, categoryFilter, setSearchQuery, setCategoryFilter, removeObject, updateObject, removeObjects } = useObjectStore()
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
 
-  const presetCategories = ['点状', '条状', '片状', '块状', '其他']
+  const presetCategories = ['线状异物', '球状异物', '块状异物', '环状异物', '点状异物', '大异物']
 
   const categories = useMemo(() => {
     const cats = new Set(objects.map((o) => o.category).filter(Boolean))
@@ -266,7 +266,7 @@ export default function ObjectList({
                         onClick={(e) => { e.stopPropagation(); setEditingCatId(obj.id) }}
                         title="点击修改类别"
                       >
-                        {obj.category || '点状'}
+                        {obj.category || '线状异物'}
                       </span>
                     )}
                     <span>使用 {obj.usageCount || 0} 次</span>

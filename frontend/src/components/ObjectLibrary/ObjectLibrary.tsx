@@ -4,7 +4,7 @@ import ObjectEditor, { type UploadedImage } from './ObjectEditor'
 import { useObjectStore } from '@/stores/objectStore'
 import { loadImage } from '@/utils/imageProcessing'
 
-const PRESET_CATEGORIES = ['点状', '条状', '片状', '块状', '其他']
+const PRESET_CATEGORIES = ['线状异物', '球状异物', '块状异物', '环状异物', '点状异物', '大异物']
 
 function createThumbnail(img: HTMLImageElement, maxSize: number): string {
   const canvas = document.createElement('canvas')
@@ -39,7 +39,7 @@ export default function ObjectLibrary() {
 
   const [showCatModal, setShowCatModal] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
-  const [tempCat, setTempCat] = useState('点状')
+  const [tempCat, setTempCat] = useState('线状异物')
   const [tempCustomCat, setTempCustomCat] = useState('')
 
   const addObject = useObjectStore((s) => s.addObject)
@@ -114,7 +114,7 @@ export default function ObjectLibrary() {
     const files = e.target.files
     if (files && files.length > 0) {
       setPendingFiles(Array.from(files))
-      setTempCat('点状')
+      setTempCat('线状异物')
       setTempCustomCat('')
       setShowCatModal(true)
     }
@@ -124,7 +124,7 @@ export default function ObjectLibrary() {
     const files = e.target.files
     if (files && files.length > 0) {
       setPendingFiles(Array.from(files))
-      setTempCat('点状')
+      setTempCat('线状异物')
       setTempCustomCat('')
       setShowCatModal(true)
     }
