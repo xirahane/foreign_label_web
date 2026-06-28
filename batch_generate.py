@@ -419,23 +419,27 @@ def compose_single(
         if y2 <= y1 or x2 <= x1:
             continue
 
-        # 提取背景 ROI 用于自适应灰度调整
-        bg_roi = bg[y1:y2, x1:x2].copy()
-
         # 裁剪异物到有效区域
         obj_piece = obj_resized[:y2 - y1, :x2 - x1]
 
-        # 自适应灰度调整：使异物比局部背景暗 config.gray_offset
-        obj_piece = adjust_object_brightness(obj_piece, bg_roi, config.gray_offset)
+        # 自适应灰度调整：内部均匀、边缘略亮
+        bg_roi_raw = bg[y1:y2, x1:x2]
+        obj_piece = adjust_object_brightness(obj_piece, bg_roi_raw, config.gray_offset)
 
+        # 构造物体 mask
         if has_alpha:
-            alpha = obj_piece[:, :, 3].astype(np.float32) / 255.0
-            alpha = alpha[:, :, np.newaxis]
-            fg_rgb = obj_piece[:, :, :3].astype(np.float32)
-            roi = bg[y1:y2, x1:x2].astype(np.float32)
-            bg[y1:y2, x1:x2] = (fg_rgb * alpha + roi * (1 - alpha)).astype(np.uint8)
+            obj_mask = (obj_piece[:, :, 3] > 10).astype(np.uint8) * 255
         else:
-            bg[y1:y2, x1:x2] = obj_piece[:, :, :3]
+            obj_gray = cv2.cvtColor(obj_piece[:, :, :3], cv2.COLOR_BGR2GRAY)
+            obj_mask = (obj_gray < 250).astype(np.uint8) * 255
+
+        if not obj_mask.any():
+            continue
+
+        alpha_f = (obj_mask.astype(np.float32) / 255.0)[:, :, np.newaxis]
+        fg = obj_piece[:, :, :3].astype(np.float32)
+        roi = bg[y1:y2, x1:x2].astype(np.float32)
+        bg[y1:y2, x1:x2] = (fg * alpha_f + roi * (1 - alpha_f)).astype(np.uint8)
 
         aabb_x, aabb_y = x, y
         aabb_w, aabb_h = w, h
