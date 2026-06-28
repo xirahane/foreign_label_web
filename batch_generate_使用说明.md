@@ -38,6 +38,7 @@ python batch_generate.py --bg_dir ./backgrounds --obj_dirs ./masks_by_category/d
 | `--bbox_strategy` | `tight` | `tight` 紧贴 / `expand` 扩张 |
 | `--bbox_expand` | 10 | 扩张比例（%） |
 | `--viz_boxes` | 关闭 | 输出检测区域可视化图像 |
+| `--gray_offset` | 50 | 异物灰度偏移量，确保异物比背景暗（异物灰度 = 局部背景均值 - 偏移） |
 
 ## 输出结构
 
@@ -70,6 +71,7 @@ python batch_generate.py `
     --edge_margin 40 `
     --bbox_strategy expand `
     --bbox_expand 15 `
+    --gray_offset 30 `
     --viz_boxes
 ```
 
@@ -93,3 +95,4 @@ batch_generate(config)
 - 背景图支持 jpg/png/bmp/webp，灰度图自动转为彩色
 - 如果背景图有同名 `.txt` 标注文件，会自动合并到输出标注中
 - 面积小于生成区域 0.1% 的标注框会自动以中心等比扩张
+- **自适应灰度**：异物亮度会根据放置区域的局部背景灰度自动调整 `异物灰度 = 局部背景均值 - gray_offset`，确保不同亮度的X光片上异物始终比背景暗。偏移量可通过 `--gray_offset` 调节。

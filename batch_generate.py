@@ -1,7 +1,7 @@
 """
 批量化异物生成脚本
 
-用法:
+    用法:
     python batch_generate.py \
         --bg_dir ./backgrounds \
         --obj_dirs ./objects/条状 ./objects/点状 ./objects/块状 \
@@ -10,6 +10,7 @@
         --obj_count_min 1 --obj_count_max 5 \
         --scale_min 50 --scale_max 150 \
         --rotation_min 0 --rotation_max 360 \
+        --gray_offset 30 \
         --viz_boxes
 
 也可作为模块导入:
@@ -49,6 +50,7 @@ class GenerationConfig:
     max_dim: int = 400                    # 自动检测时的降采样最大尺寸
     class_name: str = "0"                 # classes.txt 内容（默认只有 0）
     viz_boxes: bool = False               # 是否生成背景图检测区域可视化
+    gray_offset: int = 50                 # 异物灰度偏移量：异物灰度 = 局部背景均值 - 偏移量（确保异物比背景暗）
 
 
 # ─── Helper functions ───────────────────────────────────────────────
@@ -202,7 +204,82 @@ def draw_polygon_on_image(img: np.ndarray, corners: np.ndarray, color=(0, 255, 0
     return vis
 
 
-# ─── Placement within polygon ───────────────────────────────────────
+# ─── Adaptive grayscale adjustment ──────────────────────────────────
+
+def adjust_object_brightness(
+    obj_rgba: np.ndarray,
+    bg_roi: np.ndarray,
+    offset: int,
+    edge_width: int = 2,
+) -> np.ndarray:
+    """
+    根据放置区域的背景灰度自适应调整异物亮度。
+
+    规则:
+    - 异物内部灰度统一 = 背景局部均值 - offset（均匀无纹理）
+    - 异物边缘灰度略高于内部（稍白），向背景自然过渡
+    - 利用原有 alpha 通道实现和背景的软边缘融合
+
+    Args:
+        obj_rgba:   异物图像 (H, W, 3 或 4)
+        bg_roi:     背景对应区域 (H, W, 3 或 4)
+        offset:     灰度偏移量（像素值），控制异物比背景暗多少
+        edge_width: 边缘过渡宽度（像素），越大过渡越柔和
+
+    Returns:
+        调整后的异物图像
+    """
+    result = obj_rgba.copy()
+    h, w = result.shape[:2]
+    has_alpha = result.shape[2] == 4
+
+    # ---- 1. 计算背景局部灰度均值 ----
+    if bg_roi.shape[2] >= 3:
+        bg_gray = cv2.cvtColor(bg_roi[:, :, :3], cv2.COLOR_BGR2GRAY).astype(np.float32)
+    else:
+        bg_gray = bg_roi.astype(np.float32)
+
+    valid = (bg_gray > 10) & (bg_gray < 250)
+    local_mean = float(bg_gray[valid].mean()) if valid.any() else float(bg_gray.mean())
+
+    # 目标内部灰度 = 背景均值 - offset，最低 5，确保始终可见
+    interior_gray = max(5.0, local_mean - offset)
+
+    # ---- 2. 构建异物 mask ----
+    if has_alpha:
+        obj_mask = (result[:, :, 3] > 10).astype(np.uint8)
+    else:
+        obj_gray = cv2.cvtColor(result[:, :, :3], cv2.COLOR_BGR2GRAY)
+        obj_mask = (obj_gray < 250).astype(np.uint8)
+
+    if not obj_mask.any():
+        return result
+
+    # ---- 3. 腐蚀得到内部区域，膨胀得到边缘带 ----
+    ks = edge_width * 2 + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ks, ks))
+    interior = cv2.erode(obj_mask, kernel)
+
+    # 计算每个像素到最近背景像素的距离 → 用于边缘渐变权重
+    dist = cv2.distanceTransform((obj_mask == 0).astype(np.uint8), cv2.DIST_L2, 3)
+    dist = np.clip(dist, 0, edge_width)
+    t = dist / max(edge_width, 1)          # t=0 靠近内部, t=1 靠近边缘外
+    t = np.clip(1.0 - t, 0, 1)            # 反转：0=边缘/外部, 1=内部深处
+
+    # ---- 4. 边缘灰度略高于内部（向背景靠拢但不超过背景的 70%）----
+    edge_gray = interior_gray + (local_mean - interior_gray) * (1.0 - t) * 0.30
+
+    # 灰度图：内部=interior_gray，边缘略亮
+    gray_map = np.full((h, w), interior_gray, dtype=np.float32)
+    gray_map[obj_mask > 0] = edge_gray[obj_mask > 0]
+
+    # ---- 5. 写入 RGB 通道 ----
+    for c in range(3):
+        ch = result[:, :, c].astype(np.float32)
+        ch[obj_mask > 0] = gray_map[obj_mask > 0]
+        result[:, :, c] = np.clip(ch, 0, 255).astype(np.uint8)
+
+    return result
 
 def generate_placement(
     img_w: int, img_h: int,
@@ -342,14 +419,23 @@ def compose_single(
         if y2 <= y1 or x2 <= x1:
             continue
 
+        # 提取背景 ROI 用于自适应灰度调整
+        bg_roi = bg[y1:y2, x1:x2].copy()
+
+        # 裁剪异物到有效区域
+        obj_piece = obj_resized[:y2 - y1, :x2 - x1]
+
+        # 自适应灰度调整：使异物比局部背景暗 config.gray_offset
+        obj_piece = adjust_object_brightness(obj_piece, bg_roi, config.gray_offset)
+
         if has_alpha:
-            alpha = obj_resized[:y2 - y1, :x2 - x1, 3].astype(np.float32) / 255.0
+            alpha = obj_piece[:, :, 3].astype(np.float32) / 255.0
             alpha = alpha[:, :, np.newaxis]
-            fg_rgb = obj_resized[:y2 - y1, :x2 - x1, :3].astype(np.float32)
+            fg_rgb = obj_piece[:, :, :3].astype(np.float32)
             roi = bg[y1:y2, x1:x2].astype(np.float32)
             bg[y1:y2, x1:x2] = (fg_rgb * alpha + roi * (1 - alpha)).astype(np.uint8)
         else:
-            bg[y1:y2, x1:x2] = obj_resized[:y2 - y1, :x2 - x1]
+            bg[y1:y2, x1:x2] = obj_piece[:, :, :3]
 
         aabb_x, aabb_y = x, y
         aabb_w, aabb_h = w, h
@@ -489,6 +575,8 @@ def main():
     parser.add_argument("--max_dim", type=int, default=400, help="自动检测降采样最大尺寸 (默认: 400)")
     parser.add_argument("--viz_boxes", action="store_true",
                         help="生成 backgrounds_box 文件夹，保存检测区域可视化图像")
+    parser.add_argument("--gray_offset", type=int, default=50,
+                        help="异物灰度偏移量：异物灰度 = 局部背景均值 - 偏移量，确保异物比背景暗 (默认: 50)")
 
     args = parser.parse_args()
 
@@ -509,6 +597,7 @@ def main():
         bbox_expand_ratio=args.bbox_expand,
         max_dim=args.max_dim,
         viz_boxes=args.viz_boxes,
+        gray_offset=args.gray_offset,
     )
 
     print(f"背景图文件夹: {config.bg_dir}")
@@ -521,6 +610,7 @@ def main():
     print(f"边缘留白: {config.edge_margin}px")
     print(f"融合模式: {config.blend_mode}")
     print(f"标注框策略: {config.bbox_strategy}")
+    print(f"灰度偏移: {config.gray_offset} (异物比背景暗)")
     if config.viz_boxes:
         print(f"可视化输出: {Path(config.output_dir) / 'backgrounds_box'}")
     print()
